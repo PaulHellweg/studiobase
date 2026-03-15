@@ -1,0 +1,140 @@
+{
+  "realm": "studiobase",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      { "name": "super_admin", "description": "Platform super administrator" },
+      { "name": "tenant_admin", "description": "Studio/tenant administrator" },
+      { "name": "teacher", "description": "Teacher/instructor" },
+      { "name": "customer", "description": "Customer/student" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "studiobase-app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "pkceCodeChallengeMethod": "S256",
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "protocolMappers": [
+        {
+          "name": "tenantId",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "tenantId",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "tenantId",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@studiobase.dev",
+      "email": "admin@studiobase.dev",
+      "firstName": "Platform",
+      "lastName": "Admin",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["super_admin"]
+    },
+    {
+      "username": "owner@halenow.dev",
+      "email": "owner@halenow.dev",
+      "firstName": "Studio",
+      "lastName": "Owner",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["tenant_admin"],
+      "attributes": {
+        "tenantId": ["tenant-halenow"]
+      }
+    },
+    {
+      "username": "teacher@halenow.dev",
+      "email": "teacher@halenow.dev",
+      "firstName": "Jane",
+      "lastName": "Teacher",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["teacher"],
+      "attributes": {
+        "tenantId": ["tenant-halenow"]
+      }
+    },
+    {
+      "username": "customer@test.dev",
+      "email": "customer@test.dev",
+      "firstName": "Test",
+      "lastName": "Customer",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "password",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["customer"],
+      "attributes": {
+        "tenantId": ["tenant-halenow"]
+      }
+    }
+  ]
+}

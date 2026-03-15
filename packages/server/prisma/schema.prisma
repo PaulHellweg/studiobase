@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Role {
+  super_admin
+  tenant_admin
+  teacher
+  customer
+
+  @@map("role")
+}
+
+enum ClassCategory {
+  yoga
+  pilates
+  dance
+  fitness
+  meditation
+  martial_arts
+  other
+
+  @@map("class_category")
+}
+
+enum RecurrenceType {
+  none
+  daily
+  weekly
+  custom
+
+  @@map("recurrence_type")
+}
+
+enum InstanceStatus {
+  scheduled
+  cancelled
+  completed
+
+  @@map("instance_status")
+}
+
+enum BookingStatus {
+  confirmed
+  waitlisted
+  cancelled
+  attended
+  no_show
+
+  @@map("booking_status")
+}
+
+enum CreditTransactionType {
+  purchase
+  deduction
+  refund
+  admin_adjustment
+  expiry
+
+  @@map("credit_transaction_type")
+}
+
+enum PaymentStatus {
+  pending
+  succeeded
+  failed
+  refunded
+
+  @@map("payment_status")
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id                   String   @id @default(uuid())
+  name                 String
+  slug                 String   @unique
+  logoUrl              String?  @map("logo_url")
+  primaryColor         String?  @map("primary_color")
+  stripeCustomerId     String?  @map("stripe_customer_id")
+  stripeSubscriptionId String?  @map("stripe_subscription_id")
+  isActive             Boolean  @default(true) @map("is_active")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  studios            Studio[]
+  classTypes         ClassType[]
+  schedules          Schedule[]
+  scheduleInstances  ScheduleInstance[]
+  userProfiles       UserProfile[]
+  teacherProfiles    TeacherProfile[]
+  bookings           Booking[]
+  creditPackages     CreditPackage[]
+  creditBalances     CreditBalance[]
+  creditTransactions CreditTransaction[]
+  payments           Payment[]
+  Room               Room[]
+
+  @@map("tenants")
+}
+
+model Studio {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  name      String
+  address   String
+  timezone  String
+  isActive  Boolean   @default(true) @map("is_active")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rooms  Room[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("studios")
+}
+
+model Room {
+  id        String   @id @default(uuid())
+  studioId  String   @map("studio_id")
+  tenantId  String   @map("tenant_id")
+  name      String
+  capacity  Int
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  studio            Studio             @relation(fields: [studioId], references: [id], onDelete: Cascade)
+  schedules         Schedule[]
+  scheduleInstances ScheduleInstance[]
+
+  @@index([tenantId])
+  @@index([studioId])
+  @@map("rooms")
+}
+
+model ClassType {
+  id              String        @id @default(uuid())
+  tenantId        String        @map("tenant_id")
+  name            String
+  description     String?
+  category        ClassCategory
+  durationMinutes Int           @map("duration_minutes")
+  creditCost      Int           @map("credit_cost")
+  color           String?
+  isActive        Boolean       @default(true) @map("is_active")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedules         Schedule[]
+  scheduleInstances ScheduleInstance[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("class_types")
+}
+
+model Schedule {
+  id             String         @id @default(uuid())
+  tenantId       String         @map("tenant_id")
+  classTypeId    String         @map("class_type_id")
+  roomId         String         @map("room_id")
+  teacherId      String         @map("teacher_id")
+  recurrenceType RecurrenceType @map("recurrence_type")
+  recurrenceDays Int[]          @map("recurrence_days")
+  startTime      String         @map("start_time")
+  endTime        String         @map("end_time")
+  startDate      DateTime       @map("start_date")
+  endDate        DateTime?      @map("end_date")
+  maxCapacity    Int            @map("max_capacity")
+  isActive       Boolean        @default(true) @map("is_active")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  classType         ClassType          @relation(fields: [classTypeId], references: [id])
+  room              Room               @relation(fields: [roomId], references: [id])
+  teacher           UserProfile        @relation("TeacherSchedules", fields: [teacherId], references: [id])
+  scheduleInstances ScheduleInstance[]
+
+  @@index([tenantId])
+  @@index([tenantId, teacherId])
+  @@index([tenantId, roomId])
+  @@map("schedules")
+}
+
+model ScheduleInstance {
+  id           String         @id @default(uuid())
+  scheduleId   String         @map("schedule_id")
+  tenantId     String         @map("tenant_id")
+  classTypeId  String         @map("class_type_id")
+  roomId       String         @map("room_id")
+  teacherId    String         @map("teacher_id")
+  startAt      DateTime       @map("start_at")
+  endAt        DateTime       @map("end_at")
+  maxCapacity  Int            @map("max_capacity")
+  status       InstanceStatus @default(scheduled)
+  isCancelled  Boolean        @default(false) @map("is_cancelled")
+  cancelReason String?        @map("cancel_reason")
+  notes        String?
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  schedule  Schedule    @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  classType ClassType   @relation(fields: [classTypeId], references: [id])
+  room      Room        @relation(fields: [roomId], references: [id])
+  teacher   UserProfile @relation("TeacherInstances", fields: [teacherId], references: [id])
+  bookings  Booking[]
+
+  @@index([tenantId])
+  @@index([tenantId, startAt])
+  @@index([tenantId, teacherId])
+  @@index([scheduleId])
+  @@map("schedule_instances")
+}
+
+model UserProfile {
+  id                       String    @id @default(uuid())
+  keycloakId               String    @unique @map("keycloak_id")
+  tenantId                 String?   @map("tenant_id")
+  email                    String
+  firstName                String    @map("first_name")
+  lastName                 String    @map("last_name")
+  phone                    String?
+  avatarUrl                String?   @map("avatar_url")
+  marketingConsent         Boolean   @default(false) @map("marketing_consent")
+  dataRetentionRequestedAt DateTime? @map("data_retention_requested_at")
+  deletionRequestedAt      DateTime? @map("deletion_requested_at")
+  createdAt                DateTime  @default(now()) @map("created_at")
+  updatedAt                DateTime  @updatedAt @map("updated_at")
+
+  tenant             Tenant?             @relation(fields: [tenantId], references: [id])
+  teacherProfile     TeacherProfile?
+  bookings           Booking[]
+  creditBalance      CreditBalance?
+  creditTransactions CreditTransaction[]
+  payments           Payment[]
+  teacherSchedules   Schedule[]          @relation("TeacherSchedules")
+  teacherInstances   ScheduleInstance[]  @relation("TeacherInstances")
+
+  @@index([tenantId])
+  @@index([email])
+  @@index([keycloakId])
+  @@map("user_profiles")
+}
+
+model TeacherProfile {
+  id            String   @id @default(uuid())
+  userProfileId String   @unique @map("user_profile_id")
+  tenantId      String   @map("tenant_id")
+  bio           String?
+  specialties   String[]
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userProfile UserProfile @relation(fields: [userProfileId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("teacher_profiles")
+}
+
+model Booking {
+  id                 String        @id @default(uuid())
+  tenantId           String        @map("tenant_id")
+  scheduleInstanceId String        @map("schedule_instance_id")
+  userId             String        @map("user_id")
+  status             BookingStatus @default(confirmed)
+  creditsUsed        Int           @map("credits_used")
+  waitlistPosition   Int?          @map("waitlist_position")
+  cancelledAt        DateTime?     @map("cancelled_at")
+  cancelReason       String?       @map("cancel_reason")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  scheduleInstance   ScheduleInstance    @relation(fields: [scheduleInstanceId], references: [id])
+  user               UserProfile         @relation(fields: [userId], references: [id])
+  creditTransactions CreditTransaction[]
+
+  @@unique([scheduleInstanceId, userId], name: "unique_booking_per_instance")
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([scheduleInstanceId])
+  @@map("bookings")
+}
+
+model CreditPackage {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  name          String
+  credits       Int
+  priceCents    Int      @map("price_cents")
+  currency      String   @default("EUR")
+  validityDays  Int?     @map("validity_days")
+  stripePriceId String?  @map("stripe_price_id")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactions CreditTransaction[]
+  payments     Payment[]
+
+  @@index([tenantId])
+  @@index([tenantId, isActive])
+  @@map("credit_packages")
+}
+
+model CreditBalance {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  userId    String   @unique @map("user_id")
+  balance   Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   UserProfile @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@map("credit_balances")
+}
+
+model CreditTransaction {
+  id           String                @id @default(uuid())
+  tenantId     String                @map("tenant_id")
+  userId       String                @map("user_id")
+  type         CreditTransactionType
+  amount       Int
+  balanceAfter Int                   @map("balance_after")
+  bookingId    String?               @map("booking_id")
+  packageId    String?               @map("package_id")
+  adminNote    String?               @map("admin_note")
+  expiresAt    DateTime?             @map("expires_at")
+  createdAt    DateTime              @default(now()) @map("created_at")
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    UserProfile    @relation(fields: [userId], references: [id])
+  booking Booking?       @relation(fields: [bookingId], references: [id])
+  package CreditPackage? @relation(fields: [packageId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([userId, createdAt])
+  @@map("credit_transactions")
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  tenantId              String        @map("tenant_id")
+  userId                String        @map("user_id")
+  packageId             String?       @map("package_id")
+  stripePaymentIntentId String?       @unique @map("stripe_payment_intent_id")
+  stripeSubscriptionId  String?       @map("stripe_subscription_id")
+  amountCents           Int           @map("amount_cents")
+  currency              String        @default("EUR")
+  status                PaymentStatus @default(pending)
+  metadata              Json?
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user    UserProfile    @relation(fields: [userId], references: [id])
+  package CreditPackage? @relation(fields: [packageId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+  @@index([stripePaymentIntentId])
+  @@map("payments")
+}

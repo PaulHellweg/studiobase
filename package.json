@@ -1,0 +1,17 @@
+{
+  "name": "studiobase",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
+    "dev:server": "cd packages/server && pnpm dev",
+    "dev:client": "cd packages/client && pnpm dev",
+    "db:push": "cd packages/server && pnpm prisma db push",
+    "db:seed": "cd packages/server && pnpm prisma db seed",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
