@@ -127,30 +127,63 @@ function PackageCard({
 export default function CreditShop() {
   const { slug } = useParams<{ slug: string }>();
 
-  // In a real app the tenantId would come from context/auth;
-  // for now we show a "not connected" state gracefully
   const { data: balance } = trpc.credit.balance.get.useQuery(undefined, { retry: false });
 
-  // Credit packages require a tenantId — we use a placeholder UUID that returns empty gracefully
-  // In production this would come from the auth context or be embedded in the page by SSR
+  // Credit packages require a tenantId — placeholder returns empty gracefully when unauthenticated
   const PLACEHOLDER_TENANT_ID = "00000000-0000-0000-0000-000000000000";
   const { data: packages, isLoading } = trpc.credit.packages.list.useQuery(
     { tenantId: PLACEHOLDER_TENANT_ID, activeOnly: true },
     { retry: false }
   );
 
+  const checkoutMutation = trpc.payment.createCheckout.useMutation({
+    onSuccess: ({ checkoutUrl }) => {
+      window.location.href = checkoutUrl;
+    },
+    onError: (err) => {
+      console.error("[CreditShop] Checkout error:", err);
+      alert(`Fehler beim Starten des Checkouts: ${err.message}`);
+    },
+  });
+
+  const subscriptionMutation = trpc.payment.createSubscription.useMutation({
+    onSuccess: ({ checkoutUrl }) => {
+      window.location.href = checkoutUrl;
+    },
+    onError: (err) => {
+      console.error("[CreditShop] Subscription error:", err);
+      alert(`Fehler beim Starten des Abonnements: ${err.message}`);
+    },
+  });
+
   const displayName = slug
     ? slug.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
     : "Studio";
 
+  const origin = window.location.origin;
+  const successUrl = `${origin}/${slug ?? ""}/shop?payment=success`;
+  const cancelUrl = `${origin}/${slug ?? ""}/shop`;
+
   function handleBuy(pkg: CreditPackage) {
-    // TODO: Initiate Stripe Checkout
-    // In production: call trpc.payment.createCheckoutSession.mutate({ packageId: pkg.id })
-    // then redirect to session.url
-    console.log("TODO: Stripe Checkout for package", pkg.id);
-    alert(`Stripe Checkout für "${pkg.name}" — TODO`);
+    if (pkg.stripePriceId) {
+      // Has a Stripe price — determine mode by convention: subscriptions have recurring prices.
+      // The server will handle the correct mode. We use createCheckout for one-time,
+      // createSubscription for recurring (identified by stripePriceId presence).
+      subscriptionMutation.mutate({
+        packageId: pkg.id,
+        successUrl,
+        cancelUrl,
+      });
+    } else {
+      checkoutMutation.mutate({
+        packageId: pkg.id,
+        successUrl,
+        cancelUrl,
+      });
+    }
   }
 
+  const isBuyingAny = checkoutMutation.isPending || subscriptionMutation.isPending;
   const creditBalance = balance?.balance ?? 0;
 
   return (
@@ -241,7 +274,7 @@ export default function CreditShop() {
                 key={pkg.id}
                 pkg={pkg as CreditPackage}
                 onBuy={() => handleBuy(pkg as CreditPackage)}
-                isBuying={false}
+                isBuying={isBuyingAny}
               />
             ))}
           </div>

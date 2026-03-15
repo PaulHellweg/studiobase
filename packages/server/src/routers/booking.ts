@@ -7,6 +7,12 @@ import {
   ListBookingsSchema,
   MarkAttendanceSchema,
 } from "@studiobase/shared";
+import { sendEmail } from "../lib/email";
+import {
+  bookingConfirmation,
+  bookingCancellation,
+  waitlistPromotion,
+} from "../lib/emailTemplates";
 
 const CANCELLATION_WINDOW_HOURS = 2;
 
@@ -18,7 +24,7 @@ export const bookingRouter = router({
   create: tenantProcedure
     .input(CreateBookingSchema)
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      const booking = await ctx.prisma.$transaction(async (tx) => {
         // 1. Lock the instance row
         const instance = await tx.scheduleInstance.findFirst({
           where: { id: input.scheduleInstanceId, tenantId: ctx.tenantId, isCancelled: false },
@@ -118,6 +124,35 @@ export const bookingRouter = router({
           },
         });
       });
+
+      // Send confirmation email (fire-and-forget; email failures must not abort the booking)
+      if (booking.status === "confirmed") {
+        const [user, instance] = await Promise.all([
+          ctx.prisma.userProfile.findUnique({ where: { id: ctx.userId } }),
+          ctx.prisma.scheduleInstance.findUnique({
+            where: { id: input.scheduleInstanceId },
+            include: { classType: true, room: { include: { studio: true } } },
+          }),
+        ]);
+        if (user && instance) {
+          void sendEmail({
+            to: user.email,
+            subject: `Buchungsbestätigung: ${instance.classType.name}`,
+            html: bookingConfirmation({
+              customerName: user.firstName,
+              className: instance.classType.name,
+              date: instance.startAt.toLocaleDateString("de-DE"),
+              time: instance.startAt.toLocaleTimeString("de-DE", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+              studio: instance.room.studio.name,
+            }),
+          });
+        }
+      }
+
+      return booking;
     }),
 
   /**
@@ -127,7 +162,9 @@ export const bookingRouter = router({
   cancel: tenantProcedure
     .input(CancelBookingSchema)
     .mutation(async ({ ctx, input }) => {
-      return ctx.prisma.$transaction(async (tx) => {
+      // cancelledBooking = snapshot of booking before cancellation
+      // promotedUserId = user who was promoted from waitlist (if any)
+      const { cancelledBooking, promotedUserId } = await ctx.prisma.$transaction(async (tx) => {
         const booking = await tx.booking.findFirst({
           where: { id: input.bookingId, userId: ctx.userId, tenantId: ctx.tenantId },
           include: { scheduleInstance: { include: { classType: true } } },
@@ -173,6 +210,8 @@ export const bookingRouter = router({
           });
         }
 
+        let promotedUserId: string | null = null;
+
         // Promote first waitlist entry if this was a confirmed booking
         if (booking.status === "confirmed") {
           const nextWaiting = await tx.booking.findFirst({
@@ -211,6 +250,7 @@ export const bookingRouter = router({
                   where: { id: nextWaiting.id },
                   data: { status: "confirmed", creditsUsed: creditCost, waitlistPosition: null },
                 });
+                promotedUserId = nextWaiting.userId;
               }
               // If insufficient credits — leave on waitlist, skip promotion
             } else {
@@ -218,12 +258,51 @@ export const bookingRouter = router({
                 where: { id: nextWaiting.id },
                 data: { status: "confirmed", creditsUsed: 0, waitlistPosition: null },
               });
+              promotedUserId = nextWaiting.userId;
             }
           }
         }
 
-        return { success: true };
+        return { cancelledBooking: booking, promotedUserId };
       });
+
+      // Send cancellation email (fire-and-forget)
+      const user = await ctx.prisma.userProfile.findUnique({ where: { id: ctx.userId } });
+      if (user) {
+        void sendEmail({
+          to: user.email,
+          subject: `Buchung storniert: ${cancelledBooking.scheduleInstance.classType.name}`,
+          html: bookingCancellation({
+            customerName: user.firstName,
+            className: cancelledBooking.scheduleInstance.classType.name,
+            date: cancelledBooking.scheduleInstance.startAt.toLocaleDateString("de-DE"),
+          }),
+        });
+      }
+
+      // Send waitlist-promotion email if someone was promoted
+      if (promotedUserId) {
+        const promotedUser = await ctx.prisma.userProfile.findUnique({
+          where: { id: promotedUserId },
+        });
+        if (promotedUser) {
+          void sendEmail({
+            to: promotedUser.email,
+            subject: `Du hast einen Platz bekommen: ${cancelledBooking.scheduleInstance.classType.name}`,
+            html: waitlistPromotion({
+              customerName: promotedUser.firstName,
+              className: cancelledBooking.scheduleInstance.classType.name,
+              date: cancelledBooking.scheduleInstance.startAt.toLocaleDateString("de-DE"),
+              time: cancelledBooking.scheduleInstance.startAt.toLocaleTimeString("de-DE", {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            }),
+          });
+        }
+      }
+
+      return { success: true };
     }),
 
   /** List bookings — customer sees own, teacher sees classes they teach, admin sees all */

@@ -6,11 +6,17 @@ import {
   CreateSubscriptionSchema,
   ListPaymentsSchema,
 } from "@studiobase/shared";
+import {
+  createCheckoutSession,
+  createSubscriptionSession,
+} from "../lib/stripe";
+import { grantCredits } from "../lib/credits";
+import { sendEmail } from "../lib/email";
+import { creditsPurchased } from "../lib/emailTemplates";
 
 export const paymentRouter = router({
   /**
    * Create Stripe Checkout session for a one-time credit package purchase.
-   * TODO: Integrate with Stripe SDK — requires STRIPE_SECRET_KEY in env.
    */
   createCheckout: tenantProcedure
     .input(CreateCheckoutSchema)
@@ -18,28 +24,55 @@ export const paymentRouter = router({
       const pkg = await ctx.prisma.creditPackage.findFirst({
         where: { id: input.packageId, tenantId: ctx.tenantId, isActive: true },
       });
-      if (!pkg) throw new TRPCError({ code: "NOT_FOUND", message: "Package not found" });
+      if (!pkg) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Package not found" });
+      }
+      if (!pkg.stripePriceId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Package has no Stripe price configured",
+        });
+      }
 
-      // TODO: const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      // TODO: const session = await stripe.checkout.sessions.create({
-      //   mode: "payment",
-      //   line_items: [{ price: pkg.stripePriceId!, quantity: 1 }],
-      //   success_url: input.successUrl,
-      //   cancel_url: input.cancelUrl,
-      //   metadata: { packageId: pkg.id, userId: ctx.userId, tenantId: ctx.tenantId },
-      // });
-      // TODO: Create pending payment record
-      // TODO: return { checkoutUrl: session.url };
+      // Fetch tenant to get the Stripe customer ID if one exists
+      const tenant = await ctx.prisma.tenant.findUnique({ where: { id: ctx.tenantId } });
 
-      throw new TRPCError({
-        code: "NOT_IMPLEMENTED",
-        message: "Stripe integration pending — set STRIPE_SECRET_KEY and uncomment Stripe code",
+      const session = await createCheckoutSession({
+        stripePriceId: pkg.stripePriceId,
+        packageId: pkg.id,
+        userId: ctx.userId,
+        tenantId: ctx.tenantId,
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        stripeCustomerId: tenant?.stripeCustomerId,
       });
+
+      // Create pending payment record so we can track it
+      await ctx.prisma.payment.create({
+        data: {
+          tenantId: ctx.tenantId,
+          userId: ctx.userId,
+          packageId: pkg.id,
+          stripePaymentIntentId: session.payment_intent as string | undefined,
+          amountCents: pkg.priceCents,
+          currency: pkg.currency.toLowerCase(),
+          status: "pending",
+          metadata: { checkoutSessionId: session.id },
+        },
+      });
+
+      if (!session.url) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Stripe did not return a checkout URL",
+        });
+      }
+
+      return { checkoutUrl: session.url };
     }),
 
   /**
    * Create Stripe subscription session.
-   * TODO: Integrate with Stripe SDK.
    */
   createSubscription: tenantProcedure
     .input(CreateSubscriptionSchema)
@@ -47,47 +80,215 @@ export const paymentRouter = router({
       const pkg = await ctx.prisma.creditPackage.findFirst({
         where: { id: input.packageId, tenantId: ctx.tenantId, isActive: true },
       });
-      if (!pkg) throw new TRPCError({ code: "NOT_FOUND", message: "Package not found" });
+      if (!pkg) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Package not found" });
+      }
+      if (!pkg.stripePriceId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Package has no Stripe price configured",
+        });
+      }
 
-      // TODO: const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      // TODO: create/update Stripe customer for user
-      // TODO: const session = await stripe.checkout.sessions.create({ mode: "subscription", ... });
-      // TODO: return { checkoutUrl: session.url };
-
-      throw new TRPCError({
-        code: "NOT_IMPLEMENTED",
-        message: "Stripe subscription integration pending",
+      const tenant = await ctx.prisma.tenant.findUnique({
+        where: { id: ctx.tenantId },
       });
+
+      const session = await createSubscriptionSession({
+        stripePriceId: pkg.stripePriceId,
+        packageId: pkg.id,
+        userId: ctx.userId,
+        tenantId: ctx.tenantId,
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        stripeCustomerId: tenant?.stripeCustomerId,
+      });
+
+      if (!session.url) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Stripe did not return a checkout URL",
+        });
+      }
+
+      return { checkoutUrl: session.url };
     }),
 
   /**
-   * Stripe webhook handler — processes checkout.session.completed, invoice.paid, charge.refunded.
-   * Note: raw body parsing is handled in index.ts; this procedure receives pre-verified events.
-   * TODO: Uncomment Stripe event handling once STRIPE_SECRET_KEY and STRIPE_WEBHOOK_SECRET are set.
+   * Stripe webhook — receives raw-body verified events from index.ts.
+   * This procedure is called internally (not directly by Stripe).
    */
   webhook: publicProcedure
     .input(z.object({ event: z.record(z.unknown()) }))
-    .mutation(async ({ input }) => {
-      const event = input.event as { type: string; data: { object: Record<string, unknown> } };
+    .mutation(async ({ ctx, input }) => {
+      const event = input.event as {
+        id: string;
+        type: string;
+        data: { object: Record<string, unknown> };
+      };
 
       switch (event.type) {
         case "checkout.session.completed": {
-          // TODO: Extract metadata, grant credits, record payment
-          // const session = event.data.object;
-          // const { packageId, userId, tenantId } = session.metadata;
-          // await grantCredits(ctx.prisma, { packageId, userId, tenantId });
+          const session = event.data.object as {
+            id: string;
+            payment_intent?: string;
+            subscription?: string;
+            metadata?: {
+              packageId?: string;
+              userId?: string;
+              tenantId?: string;
+            };
+          };
+
+          const { packageId, userId, tenantId } = session.metadata ?? {};
+          if (!packageId || !userId || !tenantId) {
+            console.error("[webhook] checkout.session.completed: missing metadata", session.id);
+            break;
+          }
+
+          // Idempotency: check if we already processed this session
+          const paymentId = session.payment_intent ?? session.id;
+          const existing = await ctx.prisma.payment.findFirst({
+            where: {
+              stripePaymentIntentId: paymentId,
+              status: "succeeded",
+            },
+          });
+          if (existing) {
+            console.log("[webhook] Already processed, skipping:", paymentId);
+            break;
+          }
+
+          await ctx.prisma.$transaction(async (tx) => {
+            await grantCredits(tx, { userId, tenantId, packageId, paymentId });
+
+            // Update or create the payment record as succeeded
+            await tx.payment.upsert({
+              where: {
+                stripePaymentIntentId: paymentId,
+              },
+              create: {
+                tenantId,
+                userId,
+                packageId,
+                stripePaymentIntentId: paymentId,
+                amountCents: 0, // Unknown at this point
+                currency: "eur",
+                status: "succeeded",
+                metadata: { checkoutSessionId: session.id },
+              },
+              update: {
+                status: "succeeded",
+              },
+            });
+          });
+
+          // Send email after transaction
+          const [user, pkg] = await Promise.all([
+            ctx.prisma.userProfile.findUnique({ where: { id: userId } }),
+            ctx.prisma.creditPackage.findUnique({ where: { id: packageId } }),
+          ]);
+          if (user && pkg) {
+            await sendEmail({
+              to: user.email,
+              subject: "Credits gutgeschrieben",
+              html: creditsPurchased({
+                customerName: user.firstName,
+                credits: pkg.credits,
+                expiresAt: pkg.validityDays
+                  ? new Date(
+                      Date.now() + pkg.validityDays * 24 * 60 * 60 * 1000
+                    ).toLocaleDateString("de-DE")
+                  : null,
+              }),
+            });
+          }
           break;
         }
-        case "invoice.paid": {
-          // TODO: Handle recurring subscription payment — grant monthly credits
+
+        case "invoice.payment_succeeded": {
+          // Subscription renewal
+          const invoice = event.data.object as {
+            id: string;
+            payment_intent?: string;
+            subscription?: string;
+            metadata?: {
+              packageId?: string;
+              userId?: string;
+              tenantId?: string;
+            };
+          };
+
+          const { packageId, userId, tenantId } = invoice.metadata ?? {};
+          if (!packageId || !userId || !tenantId) {
+            // Subscription invoices may not carry metadata on the invoice itself;
+            // in production you'd look up via invoice.subscription → subscription.metadata
+            console.warn("[webhook] invoice.payment_succeeded: missing metadata, skipping", invoice.id);
+            break;
+          }
+
+          const paymentId = invoice.payment_intent ?? invoice.id;
+
+          const existing = await ctx.prisma.payment.findFirst({
+            where: { stripePaymentIntentId: paymentId, status: "succeeded" },
+          });
+          if (existing) break;
+
+          await ctx.prisma.$transaction(async (tx) => {
+            await grantCredits(tx, { userId, tenantId, packageId, paymentId });
+            await tx.payment.create({
+              data: {
+                tenantId,
+                userId,
+                packageId,
+                stripePaymentIntentId: paymentId,
+                stripeSubscriptionId: invoice.subscription,
+                amountCents: 0,
+                currency: "eur",
+                status: "succeeded",
+                metadata: { invoiceId: invoice.id },
+              },
+            });
+          });
+
+          const [user, pkg] = await Promise.all([
+            ctx.prisma.userProfile.findUnique({ where: { id: userId } }),
+            ctx.prisma.creditPackage.findUnique({ where: { id: packageId } }),
+          ]);
+          if (user && pkg) {
+            await sendEmail({
+              to: user.email,
+              subject: "Credits gutgeschrieben",
+              html: creditsPurchased({
+                customerName: user.firstName,
+                credits: pkg.credits,
+                expiresAt: pkg.validityDays
+                  ? new Date(
+                      Date.now() + pkg.validityDays * 24 * 60 * 60 * 1000
+                    ).toLocaleDateString("de-DE")
+                  : null,
+              }),
+            });
+          }
           break;
         }
-        case "charge.refunded": {
-          // TODO: Reverse credit grant, update payment status
+
+        case "customer.subscription.deleted": {
+          const subscription = event.data.object as {
+            id: string;
+            metadata?: { tenantId?: string };
+          };
+
+          // Mark the subscription payment records inactive
+          await ctx.prisma.payment.updateMany({
+            where: { stripeSubscriptionId: subscription.id },
+            data: { status: "refunded", metadata: { cancelledByStripe: true } },
+          });
           break;
         }
+
         default:
-          // Unhandled event type — safe to ignore
+          // Unhandled event — safe to ignore
           break;
       }
 

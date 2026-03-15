@@ -3,6 +3,8 @@ import cors from "cors";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { createContext } from "./trpc";
 import { appRouter } from "./routers";
+import { constructWebhookEvent } from "./lib/stripe";
+import { prisma } from "./db";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
@@ -30,11 +32,17 @@ app.post(
     }
 
     try {
-      // TODO: const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-      // TODO: const event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-      // TODO: pass event to paymentRouter.webhook via internal caller
+      const event = constructWebhookEvent(req.body, sig as string, webhookSecret);
 
-      // Acknowledge receipt
+      // Process event via the payment router logic directly
+      const caller = appRouter.createCaller({
+        userId: undefined,
+        tenantId: undefined,
+        roles: [],
+        prisma,
+      });
+      await caller.payment.webhook({ event: event as unknown as Record<string, unknown> });
+
       res.json({ received: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";

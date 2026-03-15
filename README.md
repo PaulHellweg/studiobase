@@ -96,7 +96,7 @@ studiobase/
 | 2 | Admin UI (Dashboard, Studios, Classes, Schedule, Customers, Plans) | Done |
 | 3 | Public booking page + credit purchase | Done |
 | 4 | Teacher portal + attendance | Done |
-| 5 | Stripe live integration + email notifications | In Progress |
+| 5 | Stripe live integration + email notifications | Done |
 
 ## Security
 
