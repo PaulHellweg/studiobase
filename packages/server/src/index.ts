@@ -1,14 +1,38 @@
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { createContext } from "./trpc";
 import { appRouter } from "./routers";
 import { constructWebhookEvent } from "./lib/stripe";
 import { prisma } from "./db";
+import { apiLimiter, webhookLimiter } from "./middleware/rateLimiter";
+import { securityHeaders } from "./middleware/securityHeaders";
+import { logger } from "./lib/logger";
 
 const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 const CLIENT_URL = process.env.CLIENT_URL ?? "http://localhost:5173";
+const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://localhost:8080";
+
+// ─── Security headers (helmet + custom) ───────────────────────────────────────
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "https://js.stripe.com"],
+        frameSrc: ["'self'", "https://js.stripe.com"],
+        connectSrc: ["'self'", "https://api.stripe.com", KEYCLOAK_URL],
+        imgSrc: ["'self'", "data:", "https:"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+      },
+    },
+    // HSTS is also set by securityHeaders middleware with custom params
+    strictTransportSecurity: false,
+  })
+);
+app.use(securityHeaders);
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 app.use(
@@ -18,9 +42,19 @@ app.use(
   })
 );
 
+// ─── Request logging middleware ────────────────────────────────────────────────
+app.use((req, _res, next) => {
+  logger.info({ method: req.method, url: req.url }, "incoming request");
+  next();
+});
+
+// ─── Global rate limiting ──────────────────────────────────────────────────────
+app.use(apiLimiter);
+
 // ─── Stripe webhook — raw body MUST come before express.json() ────────────────
 app.post(
   "/api/stripe/webhook",
+  webhookLimiter,
   express.raw({ type: "application/json" }),
   async (req, res) => {
     const sig = req.headers["stripe-signature"];
@@ -71,14 +105,14 @@ app.use(
     createContext,
     onError({ error, path }) {
       if (error.code === "INTERNAL_SERVER_ERROR") {
-        console.error(`[tRPC] Error on ${path ?? "unknown"}:`, error);
+        logger.error({ path: path ?? "unknown", err: error }, "[tRPC] Internal server error");
       }
     },
   })
 );
 
 app.listen(PORT, () => {
-  console.log(`[studiobase] Server running on http://localhost:${PORT}`);
-  console.log(`[studiobase] tRPC endpoint: http://localhost:${PORT}/trpc`);
-  console.log(`[studiobase] Health: http://localhost:${PORT}/api/health`);
+  logger.info({ port: PORT, url: `http://localhost:${PORT}` }, "[studiobase] Server running");
+  logger.info({ url: `http://localhost:${PORT}/trpc` }, "[studiobase] tRPC endpoint");
+  logger.info({ url: `http://localhost:${PORT}/api/health` }, "[studiobase] Health endpoint");
 });

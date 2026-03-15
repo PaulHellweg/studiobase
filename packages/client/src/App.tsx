@@ -11,6 +11,9 @@ import BookingPage from "./pages/BookingPage";
 import MyBookings from "./pages/MyBookings";
 import CreditShop from "./pages/CreditShop";
 import Settings from "./pages/Settings";
+import Login from "./pages/Login";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuth } from "./context/AuthContext";
 
 const navLinks = [
   {
@@ -91,6 +94,62 @@ const bottomLinks = [
   },
 ];
 
+const roleBadgeLabel: Record<string, string> = {
+  tenant_admin: 'Admin',
+  teacher: 'Lehrer',
+  customer: 'Kunde',
+};
+
+/** User menu shown at the bottom of the sidebar */
+function UserMenu() {
+  const { user, logout } = useAuth();
+  if (!user) return null;
+
+  const primaryRole = user.roles[0];
+  const badgeLabel = primaryRole ? (roleBadgeLabel[primaryRole] ?? primaryRole) : null;
+
+  return (
+    <div
+      className="px-3 py-3 flex items-center gap-2.5"
+      style={{ borderTop: '1px solid var(--border)' }}
+    >
+      {/* Avatar */}
+      <div
+        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
+        style={{ background: 'var(--accent)' }}
+      >
+        {user.email.charAt(0).toUpperCase()}
+      </div>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
+          {user.email}
+        </p>
+        {badgeLabel && (
+          <span
+            className="inline-block text-[10px] px-1.5 py-0.5 rounded font-medium leading-none mt-0.5"
+            style={{ background: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: 'var(--accent)' }}
+          >
+            {badgeLabel}
+          </span>
+        )}
+      </div>
+
+      {/* Logout button */}
+      <button
+        onClick={logout}
+        title="Abmelden"
+        className="shrink-0 p-1 rounded hover:opacity-70 transition-opacity"
+        style={{ color: 'var(--text2)' }}
+      >
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 /** Admin layout with dark sidebar */
 function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -148,8 +207,8 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
 
         {/* Bottom nav */}
         <div
-          className="px-2 pb-4 flex flex-col gap-0.5"
-          style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px" }}
+          className="px-2 flex flex-col gap-0.5"
+          style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px", paddingBottom: "8px" }}
         >
           {bottomLinks.map((link) => (
             <NavLink
@@ -171,6 +230,9 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
             </NavLink>
           ))}
         </div>
+
+        {/* User menu */}
+        <UserMenu />
       </aside>
 
       {/* Main content */}
@@ -183,10 +245,22 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* ── Public customer-facing pages (no sidebar) ── */}
+        {/* ── Auth ── */}
+        <Route path="/login" element={<Login />} />
+
+        {/* ── Public customer-facing pages (no auth required) ── */}
         <Route path="/:slug/book" element={<BookingPage />} />
         <Route path="/:slug/credits" element={<CreditShop />} />
-        <Route path="/my-bookings" element={<MyBookings />} />
+
+        {/* ── Customer protected pages ── */}
+        <Route
+          path="/my-bookings"
+          element={
+            <ProtectedRoute requiredRole="customer">
+              <MyBookings />
+            </ProtectedRoute>
+          }
+        />
 
         {/* ── Legacy public booking stub (keep for backwards compat) ── */}
         <Route path="/:slug/book-legacy" element={<PublicBooking />} />
@@ -197,14 +271,70 @@ export default function App() {
           element={
             <AdminLayout>
               <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/studios" element={<Studios />} />
-                <Route path="/classes" element={<ClassTypes />} />
-                <Route path="/schedule" element={<Schedule />} />
-                <Route path="/customers" element={<Customers />} />
-                <Route path="/plans" element={<Plans />} />
-                <Route path="/teacher" element={<TeacherPortal />} />
-                <Route path="/settings" element={<Settings />} />
+                <Route
+                  path="/"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/studios"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Studios />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/classes"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <ClassTypes />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/schedule"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Schedule />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/customers"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Customers />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/plans"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Plans />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/teacher"
+                  element={
+                    <ProtectedRoute requiredRole="teacher">
+                      <TeacherPortal />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/settings"
+                  element={
+                    <ProtectedRoute requiredRole="tenant_admin">
+                      <Settings />
+                    </ProtectedRoute>
+                  }
+                />
               </Routes>
             </AdminLayout>
           }

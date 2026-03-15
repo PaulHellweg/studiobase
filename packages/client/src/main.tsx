@@ -2,12 +2,17 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { trpc, createTrpcClient } from "./lib/trpc";
+import { AuthProvider } from "./context/AuthContext";
+import { keycloak } from "./lib/keycloak";
 import App from "./App";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/Toast";
 import "./index.css";
+import "./lib/i18n";
 
-// In a real app, retrieve the token from Keycloak JS adapter or secure storage
-function getToken(): string | null {
-  return localStorage.getItem("access_token");
+// Token getter that reads live from the Keycloak instance — always fresh
+function getToken(): string | undefined {
+  return keycloak.token;
 }
 
 const queryClient = new QueryClient({
@@ -23,10 +28,16 @@ const trpcClient = createTrpcClient(getToken);
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </trpc.Provider>
+    <ErrorBoundary>
+      <ToastProvider>
+        <AuthProvider>
+          <trpc.Provider client={trpcClient} queryClient={queryClient}>
+            <QueryClientProvider client={queryClient}>
+              <App />
+            </QueryClientProvider>
+          </trpc.Provider>
+        </AuthProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

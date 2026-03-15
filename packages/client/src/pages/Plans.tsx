@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { trpc } from "../lib/trpc";
 
 type CreditPackage = {
@@ -23,6 +26,30 @@ function formatPrice(cents: number, currency: string): string {
   }).format(cents / 100);
 }
 
+const packageSchema = z.object({
+  name: z.string().min(2, "Mindestens 2 Zeichen").max(100, "Maximal 100 Zeichen"),
+  credits: z.number().int().min(1, "Mindestens 1 Credit").max(9999, "Maximal 9999 Credits"),
+  priceEuros: z
+    .number()
+    .min(0.01, "Preis muss größer als 0 sein")
+    .max(9999, "Maximal 9999"),
+  currency: z.enum(["EUR", "CHF"]),
+  validityDays: z
+    .number()
+    .int()
+    .min(1, "Mindestens 1 Tag")
+    .max(3650, "Maximal 3650 Tage")
+    .optional(),
+  stripePriceId: z.string().max(200).optional(),
+});
+
+type PackageFormData = z.infer<typeof packageSchema>;
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs mt-1" style={{ color: "#f87171" }}>{message}</p>;
+}
+
 function PackageForm({
   initial,
   onSubmit,
@@ -41,16 +68,25 @@ function PackageForm({
   onCancel: () => void;
   loading: boolean;
 }) {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [credits, setCredits] = useState(initial?.credits ?? 10);
-  const [priceEuros, setPriceEuros] = useState(
-    initial?.priceCents != null ? (initial.priceCents / 100).toFixed(2) : "49.00"
-  );
-  const [currency, setCurrency] = useState(initial?.currency ?? "EUR");
-  const [validityDays, setValidityDays] = useState<string>(
-    initial?.validityDays?.toString() ?? "180"
-  );
-  const [stripePriceId, setStripePriceId] = useState(initial?.stripePriceId ?? "");
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<PackageFormData>({
+    resolver: zodResolver(packageSchema),
+    defaultValues: {
+      name: initial?.name ?? "",
+      credits: initial?.credits ?? 10,
+      priceEuros: initial?.priceCents != null ? initial.priceCents / 100 : 49.0,
+      currency: (initial?.currency as "EUR" | "CHF") ?? "EUR",
+      validityDays: initial?.validityDays ?? 180,
+      stripePriceId: initial?.stripePriceId ?? "",
+    },
+  });
+
+  const validityDays = watch("validityDays");
+  const isSubscription = validityDays === 30;
 
   const inputStyle = {
     background: "var(--surface2)",
@@ -58,21 +94,25 @@ function PackageForm({
     color: "var(--text)",
   };
 
-  const isSubscription = validityDays === "30";
+  const errorInputStyle = {
+    ...inputStyle,
+    border: "1px solid #f87171",
+  };
+
+  const handleFormSubmit = (data: PackageFormData) => {
+    onSubmit({
+      name: data.name,
+      credits: data.credits,
+      priceCents: Math.round(data.priceEuros * 100),
+      currency: data.currency,
+      validityDays: data.validityDays,
+      stripePriceId: data.stripePriceId || undefined,
+    });
+  };
 
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit({
-          name,
-          credits,
-          priceCents: Math.round(parseFloat(priceEuros) * 100),
-          currency,
-          validityDays: validityDays ? parseInt(validityDays) : undefined,
-          stripePriceId: stripePriceId || undefined,
-        });
-      }}
+      onSubmit={handleSubmit(handleFormSubmit)}
       className="grid grid-cols-2 gap-3"
     >
       <div className="col-span-2">
@@ -81,12 +121,11 @@ function PackageForm({
         </label>
         <input
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          style={errors.name ? errorInputStyle : inputStyle}
           placeholder="z.B. 10er Karte"
-          required
+          {...register("name")}
         />
+        <FieldError message={errors.name?.message} />
       </div>
 
       <div>
@@ -97,11 +136,10 @@ function PackageForm({
           type="number"
           min={1}
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
-          value={credits}
-          onChange={(e) => setCredits(Number(e.target.value))}
-          required
+          style={errors.credits ? errorInputStyle : inputStyle}
+          {...register("credits", { valueAsNumber: true })}
         />
+        <FieldError message={errors.credits?.message} />
       </div>
 
       <div>
@@ -114,21 +152,19 @@ function PackageForm({
             min={0.01}
             step={0.01}
             className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-            style={inputStyle}
-            value={priceEuros}
-            onChange={(e) => setPriceEuros(e.target.value)}
-            required
+            style={errors.priceEuros ? errorInputStyle : inputStyle}
+            {...register("priceEuros", { valueAsNumber: true })}
           />
           <select
             className="px-3 py-2 rounded-lg text-sm outline-none"
             style={inputStyle}
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
+            {...register("currency")}
           >
             <option value="EUR">EUR</option>
             <option value="CHF">CHF</option>
           </select>
         </div>
+        <FieldError message={errors.priceEuros?.message} />
       </div>
 
       <div>
@@ -139,16 +175,16 @@ function PackageForm({
           type="number"
           min={1}
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
-          value={validityDays}
-          onChange={(e) => setValidityDays(e.target.value)}
+          style={errors.validityDays ? errorInputStyle : inputStyle}
           placeholder="z.B. 180"
+          {...register("validityDays", { valueAsNumber: true })}
         />
         {isSubscription && (
           <p className="text-xs mt-1" style={{ color: "var(--accent)" }}>
             30 Tage = Monatsabo
           </p>
         )}
+        <FieldError message={errors.validityDays?.message} />
       </div>
 
       <div>
@@ -158,10 +194,10 @@ function PackageForm({
         <input
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
           style={inputStyle}
-          value={stripePriceId}
-          onChange={(e) => setStripePriceId(e.target.value)}
           placeholder="price_…"
+          {...register("stripePriceId")}
         />
+        <FieldError message={errors.stripePriceId?.message} />
       </div>
 
       <div className="col-span-2 flex gap-2 pt-1">

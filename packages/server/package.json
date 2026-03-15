@@ -7,19 +7,27 @@
     "build": "tsc --outDir dist",
     "start": "node dist/index.js",
     "prisma": "prisma",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@paralleldrive/cuid2": "^3.3.0",
     "@prisma/client": "^5.14.0",
     "@studiobase/shared": "workspace:*",
     "@trpc/server": "^11.0.0",
+    "@types/crypto-js": "^4.2.2",
     "cors": "^2.8.5",
+    "crypto-js": "^4.2.0",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.3.1",
+    "helmet": "^8.1.0",
     "jose": "^5.4.1",
     "nodemailer": "^8.0.2",
+    "pino": "^10.3.1",
+    "pino-pretty": "^13.1.3",
     "stripe": "^15.7.0",
     "zod": "^3.22.4"
   },
@@ -28,8 +36,10 @@
     "@types/express": "^4.17.21",
     "@types/node": "^20.14.5",
     "@types/nodemailer": "^7.0.11",
+    "@types/pino": "^7.0.5",
     "prisma": "^5.14.0",
     "tsx": "^4.15.6",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "vitest": "^2.1.9"
   }
 }

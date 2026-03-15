@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { logger } from "./logger";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -64,8 +65,9 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
       subject: params.subject,
       html: params.html,
     });
+    logger.info({ subject: params.subject }, "[email] Email sent successfully");
   } catch (err) {
     // Swallow email errors in all environments — email is non-critical
-    console.error("[email] Failed to send email:", err);
+    logger.warn({ err }, "[email] Failed to send email");
   }
 }

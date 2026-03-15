@@ -5,7 +5,7 @@ import type { AppRouter } from "../../../server/src/routers";
 
 export const trpc = createTRPCReact<AppRouter>();
 
-export function createTrpcClient(getToken: () => string | null) {
+export function createTrpcClient(getToken: () => string | undefined) {
   return trpc.createClient({
     links: [
       httpBatchLink({

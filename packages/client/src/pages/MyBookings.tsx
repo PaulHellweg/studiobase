@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { trpc } from "../lib/trpc";
+import { useToast } from "../components/Toast";
 
 const ACCENT = "#6366f1";
 
@@ -139,6 +140,7 @@ function BookingCard({
 export default function MyBookings() {
   const now = new Date();
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const { showToast } = useToast();
 
   const upcomingQuery = trpc.booking.list.useQuery(
     {
@@ -164,8 +166,12 @@ export default function MyBookings() {
       setCancellingId(null);
       void upcomingQuery.refetch();
       void pastQuery.refetch();
+      showToast("Buchung erfolgreich storniert", "success");
     },
-    onError: () => setCancellingId(null),
+    onError: (err) => {
+      setCancellingId(null);
+      showToast(`Stornierung fehlgeschlagen: ${err.message}`, "error");
+    },
   });
 
   function handleCancel(bookingId: string) {

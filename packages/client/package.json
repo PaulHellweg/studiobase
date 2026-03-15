@@ -9,13 +9,18 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
     "@studiobase/shared": "workspace:*",
     "@tanstack/react-query": "^5.45.1",
     "@trpc/client": "^11.0.0",
     "@trpc/react-query": "^11.0.0",
     "@trpc/server": "^11.0.0",
+    "i18next": "^25.8.18",
+    "keycloak-js": "^26.2.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-hook-form": "^7.71.2",
+    "react-i18next": "^16.5.8",
     "react-router-dom": "^6.24.0",
     "zod": "^3.22.4"
   },

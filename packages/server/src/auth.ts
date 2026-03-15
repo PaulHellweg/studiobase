@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { KeycloakTokenPayload, Role } from "@studiobase/shared";
+import { logger } from "./lib/logger";
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://localhost:8080";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "studiobase";
@@ -25,9 +26,15 @@ export interface VerifiedToken {
 }
 
 export async function verifyKeycloakToken(token: string): Promise<VerifiedToken> {
-  const { payload } = await jwtVerify(token, getJwks(), {
-    issuer: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`,
-  });
+  let payload;
+  try {
+    ({ payload } = await jwtVerify(token, getJwks(), {
+      issuer: `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}`,
+    }));
+  } catch (err) {
+    logger.warn({ err }, "[auth] Token verification failed");
+    throw err;
+  }
 
   const decoded = payload as unknown as KeycloakTokenPayload;
 

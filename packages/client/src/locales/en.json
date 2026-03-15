@@ -1,0 +1,109 @@
+{
+  "nav": {
+    "dashboard": "Dashboard",
+    "studios": "Studios",
+    "classes": "Class Types",
+    "schedule": "Schedule",
+    "customers": "Customers",
+    "plans": "Plans",
+    "teacher": "Teacher",
+    "settings": "Settings"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "todayClasses": "Today's Classes",
+    "bookingsToday": "Bookings Today",
+    "revenueMonth": "Revenue This Month",
+    "activeCustomers": "Active Customers"
+  },
+  "booking": {
+    "book": "Book",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "spotsLeft": "{{count}} spots left",
+    "noSpots": "Fully booked",
+    "joinWaitlist": "Join Waitlist",
+    "creditsNeeded": "{{count}} credits",
+    "bookingConfirmed": "Booking confirmed!",
+    "cancelled": "Booking cancelled"
+  },
+  "credits": {
+    "balance": "Balance",
+    "credits": "Credits",
+    "buy": "Buy",
+    "packages": "Packages",
+    "validity": "Valid for {{days}} days",
+    "subscription": "Subscription",
+    "perCredit": "{{price}} per credit"
+  },
+  "exercises": {
+    "title": "Class Types",
+    "subtitle": "Manage class programme",
+    "new": "Add class type",
+    "edit": "Edit class type",
+    "name": "Name",
+    "description": "Description",
+    "category": "Category",
+    "duration": "Duration (minutes)",
+    "creditCost": "Credit cost",
+    "color": "Color",
+    "deactivate": "Deactivate",
+    "noData": "No class types found"
+  },
+  "schedule": {
+    "title": "Schedule",
+    "subtitle": "Manage recurring classes and individual sessions",
+    "today": "Today",
+    "week": "Week",
+    "month": "Month",
+    "noClasses": "No classes scheduled"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "german": "German",
+    "english": "English",
+    "save": "Save",
+    "export": "Export data",
+    "import": "Import data",
+    "deleteAccount": "Delete account",
+    "deleteWarning": "All data will be permanently deleted.",
+    "exportSuccess": "Downloading data…",
+    "importHint": "Select JSON file",
+    "dangerZone": "Danger Zone",
+    "confirmDelete": "Really delete account?",
+    "confirmDeleteHint": "This action cannot be undone."
+  },
+  "common": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit",
+    "create": "Create",
+    "search": "Search...",
+    "loading": "Loading...",
+    "error": "Error",
+    "success": "Success",
+    "noData": "No data",
+    "back": "Back",
+    "yes": "Yes",
+    "no": "No",
+    "active": "Active",
+    "inactive": "Inactive",
+    "required": "Required",
+    "close": "Close"
+  },
+  "auth": {
+    "login": "Log in",
+    "logout": "Log out",
+    "noAccess": "No access"
+  },
+  "validation": {
+    "required": "This field is required",
+    "minLength": "At least {{min}} characters",
+    "maxLength": "Maximum {{max}} characters",
+    "positiveNumber": "Must be a positive number",
+    "minNumber": "Must be at least {{min}}",
+    "invalidColor": "Invalid color code (e.g. #8b5cf6)"
+  }
+}

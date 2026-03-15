@@ -1,4 +1,7 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { trpc } from "../lib/trpc";
 
 type ClassCategory = "yoga" | "pilates" | "dance" | "fitness" | "meditation" | "martial_arts" | "other";
@@ -37,6 +40,25 @@ const CATEGORY_COLORS: Record<ClassCategory, string> = {
 // Hard-coded tenant ID — in production this comes from auth context
 const TENANT_ID = "00000000-0000-0000-0000-000000000000";
 
+const classTypeSchema = z.object({
+  name: z.string().min(2, "Mindestens 2 Zeichen").max(100, "Maximal 100 Zeichen"),
+  description: z.string().max(500, "Maximal 500 Zeichen").optional(),
+  category: z.enum(["yoga", "pilates", "dance", "fitness", "meditation", "martial_arts", "other"]),
+  durationMinutes: z.number().int().min(1, "Mindestens 1 Minute").max(480, "Maximal 480 Minuten"),
+  creditCost: z.number().int().min(0, "Muss 0 oder mehr sein").max(100, "Maximal 100 Credits"),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Ungültiger Farbcode (z.B. #8b5cf6)")
+    .optional(),
+});
+
+type ClassTypeFormData = z.infer<typeof classTypeSchema>;
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs mt-1" style={{ color: "#f87171" }}>{message}</p>;
+}
+
 function ClassTypeForm({
   initial,
   onSubmit,
@@ -44,23 +66,29 @@ function ClassTypeForm({
   loading,
 }: {
   initial?: Partial<ClassType>;
-  onSubmit: (data: {
-    name: string;
-    description?: string;
-    category: ClassCategory;
-    durationMinutes: number;
-    creditCost: number;
-    color?: string;
-  }) => void;
+  onSubmit: (data: ClassTypeFormData) => void;
   onCancel: () => void;
   loading: boolean;
 }) {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [description, setDescription] = useState(initial?.description ?? "");
-  const [category, setCategory] = useState<ClassCategory>(initial?.category ?? "yoga");
-  const [durationMinutes, setDurationMinutes] = useState(initial?.durationMinutes ?? 60);
-  const [creditCost, setCreditCost] = useState(initial?.creditCost ?? 2);
-  const [color, setColor] = useState(initial?.color ?? "#8b5cf6");
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    formState: { errors },
+  } = useForm<ClassTypeFormData>({
+    resolver: zodResolver(classTypeSchema),
+    defaultValues: {
+      name: initial?.name ?? "",
+      description: initial?.description ?? "",
+      category: initial?.category ?? "yoga",
+      durationMinutes: initial?.durationMinutes ?? 60,
+      creditCost: initial?.creditCost ?? 2,
+      color: initial?.color ?? "#8b5cf6",
+    },
+  });
+
+  const colorValue = watch("color");
 
   const inputStyle = {
     background: "var(--surface2)",
@@ -68,19 +96,14 @@ function ClassTypeForm({
     color: "var(--text)",
   };
 
+  const errorInputStyle = {
+    ...inputStyle,
+    border: "1px solid #f87171",
+  };
+
   return (
     <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit({
-          name,
-          description: description || undefined,
-          category,
-          durationMinutes,
-          creditCost,
-          color,
-        });
-      }}
+      onSubmit={handleSubmit(onSubmit)}
       className="grid grid-cols-2 gap-3"
     >
       <div className="col-span-2">
@@ -89,12 +112,11 @@ function ClassTypeForm({
         </label>
         <input
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          style={errors.name ? errorInputStyle : inputStyle}
           placeholder="z.B. Yoga Flow"
-          required
+          {...register("name")}
         />
+        <FieldError message={errors.name?.message} />
       </div>
 
       <div className="col-span-2">
@@ -103,12 +125,12 @@ function ClassTypeForm({
         </label>
         <textarea
           className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
-          style={inputStyle}
+          style={errors.description ? errorInputStyle : inputStyle}
           rows={2}
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
           placeholder="Kurze Beschreibung…"
+          {...register("description")}
         />
+        <FieldError message={errors.description?.message} />
       </div>
 
       <div>
@@ -118,8 +140,7 @@ function ClassTypeForm({
         <select
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
           style={inputStyle}
-          value={category}
-          onChange={(e) => setCategory(e.target.value as ClassCategory)}
+          {...register("category")}
         >
           {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
             <option key={k} value={k}>
@@ -127,6 +148,7 @@ function ClassTypeForm({
             </option>
           ))}
         </select>
+        <FieldError message={errors.category?.message} />
       </div>
 
       <div>
@@ -138,17 +160,17 @@ function ClassTypeForm({
             type="color"
             className="w-10 h-9 rounded-lg cursor-pointer"
             style={{ background: "var(--surface2)", border: "1px solid var(--border)" }}
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
+            value={colorValue ?? "#8b5cf6"}
+            onChange={(e) => setValue("color", e.target.value)}
           />
           <input
             className="flex-1 px-3 py-2 rounded-lg text-sm outline-none"
-            style={inputStyle}
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            pattern="^#[0-9a-fA-F]{6}$"
+            style={errors.color ? errorInputStyle : inputStyle}
+            placeholder="#8b5cf6"
+            {...register("color")}
           />
         </div>
+        <FieldError message={errors.color?.message} />
       </div>
 
       <div>
@@ -158,12 +180,11 @@ function ClassTypeForm({
         <input
           type="number"
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
+          style={errors.durationMinutes ? errorInputStyle : inputStyle}
           min={1}
-          value={durationMinutes}
-          onChange={(e) => setDurationMinutes(Number(e.target.value))}
-          required
+          {...register("durationMinutes", { valueAsNumber: true })}
         />
+        <FieldError message={errors.durationMinutes?.message} />
       </div>
 
       <div>
@@ -173,12 +194,11 @@ function ClassTypeForm({
         <input
           type="number"
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
+          style={errors.creditCost ? errorInputStyle : inputStyle}
           min={0}
-          value={creditCost}
-          onChange={(e) => setCreditCost(Number(e.target.value))}
-          required
+          {...register("creditCost", { valueAsNumber: true })}
         />
+        <FieldError message={errors.creditCost?.message} />
       </div>
 
       <div className="col-span-2 flex gap-2 pt-1">

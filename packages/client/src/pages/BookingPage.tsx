@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { trpc } from "../lib/trpc";
+import { useToast } from "../components/Toast";
 import WeeklyCalendar, {
   CalendarInstance,
   getWeekBounds,
@@ -187,6 +188,7 @@ export default function BookingPage() {
   const [bookingSuccess, setBookingSuccess] = useState(false);
 
   const { monday, sunday } = getWeekBounds(weekOffset);
+  const { showToast } = useToast();
 
   const { data: instances, isLoading, isError, refetch } = trpc.schedule.listInstances.useQuery(
     { from: monday, to: sunday },
@@ -199,6 +201,10 @@ export default function BookingPage() {
     onSuccess: () => {
       setBookingSuccess(true);
       void refetch();
+      showToast("Buchung erfolgreich!", "success");
+    },
+    onError: (err) => {
+      showToast(`Buchung fehlgeschlagen: ${err.message}`, "error");
     },
   });
 

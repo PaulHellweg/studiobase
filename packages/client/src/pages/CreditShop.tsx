@@ -1,5 +1,6 @@
 import { useParams } from "react-router-dom";
 import { trpc } from "../lib/trpc";
+import { useToast } from "../components/Toast";
 
 const ACCENT = "#6366f1";
 
@@ -126,6 +127,7 @@ function PackageCard({
 
 export default function CreditShop() {
   const { slug } = useParams<{ slug: string }>();
+  const { showToast } = useToast();
 
   const { data: balance } = trpc.credit.balance.get.useQuery(undefined, { retry: false });
 
@@ -141,8 +143,7 @@ export default function CreditShop() {
       window.location.href = checkoutUrl;
     },
     onError: (err) => {
-      console.error("[CreditShop] Checkout error:", err);
-      alert(`Fehler beim Starten des Checkouts: ${err.message}`);
+      showToast(`Fehler beim Starten des Checkouts: ${err.message}`, "error");
     },
   });
 
@@ -151,8 +152,7 @@ export default function CreditShop() {
       window.location.href = checkoutUrl;
     },
     onError: (err) => {
-      console.error("[CreditShop] Subscription error:", err);
-      alert(`Fehler beim Starten des Abonnements: ${err.message}`);
+      showToast(`Fehler beim Starten des Abonnements: ${err.message}`, "error");
     },
   });
 

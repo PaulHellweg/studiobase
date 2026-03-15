@@ -1,5 +1,9 @@
 import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { trpc } from "../lib/trpc";
+import { useToast } from "../components/Toast";
 
 type Room = {
   id: string;
@@ -16,6 +20,19 @@ type Studio = {
   isActive: boolean;
   rooms: Room[];
 };
+
+const studioSchema = z.object({
+  name: z.string().min(2, "Mindestens 2 Zeichen").max(100, "Maximal 100 Zeichen"),
+  address: z.string().min(5, "Mindestens 5 Zeichen").max(200, "Maximal 200 Zeichen"),
+  timezone: z.string().min(1, "Zeitzone erforderlich"),
+});
+
+type StudioFormData = z.infer<typeof studioSchema>;
+
+function FieldError({ message }: { message?: string }) {
+  if (!message) return null;
+  return <p className="text-xs mt-1" style={{ color: "#f87171" }}>{message}</p>;
+}
 
 function ServerError({ message }: { message: string }) {
   return (
@@ -38,13 +55,22 @@ function StudioForm({
   loading,
 }: {
   initial?: Partial<Studio>;
-  onSubmit: (data: { name: string; address: string; timezone: string }) => void;
+  onSubmit: (data: StudioFormData) => void;
   onCancel: () => void;
   loading: boolean;
 }) {
-  const [name, setName] = useState(initial?.name ?? "");
-  const [address, setAddress] = useState(initial?.address ?? "");
-  const [timezone, setTimezone] = useState(initial?.timezone ?? "Europe/Berlin");
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<StudioFormData>({
+    resolver: zodResolver(studioSchema),
+    defaultValues: {
+      name: initial?.name ?? "",
+      address: initial?.address ?? "",
+      timezone: initial?.timezone ?? "Europe/Berlin",
+    },
+  });
 
   const inputStyle = {
     background: "var(--surface2)",
@@ -52,26 +78,24 @@ function StudioForm({
     color: "var(--text)",
   };
 
+  const errorInputStyle = {
+    ...inputStyle,
+    border: "1px solid #f87171",
+  };
+
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit({ name, address, timezone });
-      }}
-      className="space-y-3"
-    >
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
           Name
         </label>
         <input
           className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1"
-          style={{ ...inputStyle, outlineColor: "var(--accent)" }}
-          value={name}
-          onChange={(e) => setName(e.target.value)}
+          style={errors.name ? errorInputStyle : { ...inputStyle, outlineColor: "var(--accent)" }}
           placeholder="z.B. Studio Mitte"
-          required
+          {...register("name")}
         />
+        <FieldError message={errors.name?.message} />
       </div>
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
@@ -79,12 +103,11 @@ function StudioForm({
         </label>
         <input
           className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1"
-          style={{ ...inputStyle, outlineColor: "var(--accent)" }}
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          style={errors.address ? errorInputStyle : { ...inputStyle, outlineColor: "var(--accent)" }}
           placeholder="Straße, PLZ Stadt"
-          required
+          {...register("address")}
         />
+        <FieldError message={errors.address?.message} />
       </div>
       <div>
         <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
@@ -93,13 +116,13 @@ function StudioForm({
         <select
           className="w-full px-3 py-2 rounded-lg text-sm outline-none"
           style={inputStyle}
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
+          {...register("timezone")}
         >
           <option value="Europe/Berlin">Europe/Berlin</option>
           <option value="Europe/Vienna">Europe/Vienna</option>
           <option value="Europe/Zurich">Europe/Zurich</option>
         </select>
+        <FieldError message={errors.timezone?.message} />
       </div>
       <div className="flex gap-2 pt-1">
         <button
@@ -209,6 +232,7 @@ function StudioCard({ studio, onEdit }: { studio: Studio; onEdit: (s: Studio) =>
 export default function Studios() {
   const [showForm, setShowForm] = useState(false);
   const [editStudio, setEditStudio] = useState<Studio | null>(null);
+  const { showToast } = useToast();
 
   const { data, isLoading, isError, refetch } = trpc.studio.list.useQuery(
     { includeDeleted: false },
@@ -219,6 +243,10 @@ export default function Studios() {
     onSuccess: () => {
       setShowForm(false);
       void refetch();
+      showToast("Studio erfolgreich angelegt", "success");
+    },
+    onError: (err) => {
+      showToast(`Fehler: ${err.message}`, "error");
     },
   });
 
@@ -226,6 +254,10 @@ export default function Studios() {
     onSuccess: () => {
       setEditStudio(null);
       void refetch();
+      showToast("Studio erfolgreich aktualisiert", "success");
+    },
+    onError: (err) => {
+      showToast(`Fehler: ${err.message}`, "error");
     },
   });
 

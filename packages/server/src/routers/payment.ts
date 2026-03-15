@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, tenantProcedure, publicProcedure } from "../trpc";
+import { logger } from "../lib/logger";
 import {
   CreateCheckoutSchema,
   CreateSubscriptionSchema,
@@ -142,7 +143,7 @@ export const paymentRouter = router({
 
           const { packageId, userId, tenantId } = session.metadata ?? {};
           if (!packageId || !userId || !tenantId) {
-            console.error("[webhook] checkout.session.completed: missing metadata", session.id);
+            logger.error({ sessionId: session.id }, "[webhook] checkout.session.completed: missing metadata");
             break;
           }
 
@@ -155,7 +156,7 @@ export const paymentRouter = router({
             },
           });
           if (existing) {
-            console.log("[webhook] Already processed, skipping:", paymentId);
+            logger.info({ paymentId }, "[webhook] Already processed, skipping");
             break;
           }
 
@@ -223,7 +224,7 @@ export const paymentRouter = router({
           if (!packageId || !userId || !tenantId) {
             // Subscription invoices may not carry metadata on the invoice itself;
             // in production you'd look up via invoice.subscription → subscription.metadata
-            console.warn("[webhook] invoice.payment_succeeded: missing metadata, skipping", invoice.id);
+            logger.warn({ invoiceId: invoice.id }, "[webhook] invoice.payment_succeeded: missing metadata, skipping");
             break;
           }
 
