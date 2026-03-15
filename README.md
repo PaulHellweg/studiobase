@@ -94,9 +94,9 @@ studiobase/
 | 0 | Foundation (monorepo, Docker, Prisma, Keycloak, tRPC) | Done |
 | 1 | Database seed (tenant, studios, classes, packages, users) | Done |
 | 2 | Admin UI (Dashboard, Studios, Classes, Schedule, Customers, Plans) | Done |
-| 3 | Public booking page + credit purchase | In Progress |
-| 4 | Teacher portal | Pending |
-| 5 | Stripe live integration + email notifications | Pending |
+| 3 | Public booking page + credit purchase | Done |
+| 4 | Teacher portal + attendance | Done |
+| 5 | Stripe live integration + email notifications | In Progress |
 
 ## Security
 

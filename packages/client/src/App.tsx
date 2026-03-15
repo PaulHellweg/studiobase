@@ -7,6 +7,9 @@ import Customers from "./pages/Customers";
 import Plans from "./pages/Plans";
 import TeacherPortal from "./pages/TeacherPortal";
 import PublicBooking from "./pages/PublicBooking";
+import BookingPage from "./pages/BookingPage";
+import MyBookings from "./pages/MyBookings";
+import CreditShop from "./pages/CreditShop";
 import Settings from "./pages/Settings";
 
 const navLinks = [
@@ -88,100 +91,125 @@ const bottomLinks = [
   },
 ];
 
+/** Admin layout with dark sidebar */
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      {/* Sidebar */}
+      <aside
+        className="w-56 flex flex-col shrink-0"
+        style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
+      >
+        {/* Logo */}
+        <div className="px-4 py-5 mb-2">
+          <div className="flex items-center gap-2">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+              style={{ background: "var(--accent)" }}
+            >
+              SB
+            </div>
+            <span className="font-semibold text-sm tracking-tight" style={{ color: "var(--text)" }}>
+              StudioBase
+            </span>
+          </div>
+        </div>
+
+        {/* Nav section label */}
+        <div className="px-4 mb-1">
+          <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text2)" }}>
+            Admin
+          </span>
+        </div>
+
+        {/* Main nav */}
+        <nav className="flex-1 px-2 flex flex-col gap-0.5">
+          {navLinks.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              end={link.to === "/"}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                  isActive ? "text-white" : "hover:text-white"
+                }`
+              }
+              style={({ isActive }) =>
+                isActive
+                  ? { background: "var(--accent)", color: "white" }
+                  : { color: "var(--text2)" }
+              }
+            >
+              {link.icon}
+              {link.label}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Bottom nav */}
+        <div
+          className="px-2 pb-4 flex flex-col gap-0.5"
+          style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px" }}
+        >
+          {bottomLinks.map((link) => (
+            <NavLink
+              key={link.to}
+              to={link.to}
+              className={({ isActive }) =>
+                `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
+                  isActive ? "text-white" : "hover:text-white"
+                }`
+              }
+              style={({ isActive }) =>
+                isActive
+                  ? { background: "var(--accent)", color: "white" }
+                  : { color: "var(--text2)" }
+              }
+            >
+              {link.icon}
+              {link.label}
+            </NavLink>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 overflow-auto">{children}</main>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
-        {/* Sidebar */}
-        <aside
-          className="w-56 flex flex-col shrink-0"
-          style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
-        >
-          {/* Logo */}
-          <div className="px-4 py-5 mb-2">
-            <div className="flex items-center gap-2">
-              <div
-                className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
-                style={{ background: "var(--accent)" }}
-              >
-                SB
-              </div>
-              <span className="font-semibold text-sm tracking-tight" style={{ color: "var(--text)" }}>
-                StudioBase
-              </span>
-            </div>
-          </div>
+      <Routes>
+        {/* ── Public customer-facing pages (no sidebar) ── */}
+        <Route path="/:slug/book" element={<BookingPage />} />
+        <Route path="/:slug/credits" element={<CreditShop />} />
+        <Route path="/my-bookings" element={<MyBookings />} />
 
-          {/* Nav section label */}
-          <div className="px-4 mb-1">
-            <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text2)" }}>
-              Admin
-            </span>
-          </div>
+        {/* ── Legacy public booking stub (keep for backwards compat) ── */}
+        <Route path="/:slug/book-legacy" element={<PublicBooking />} />
 
-          {/* Main nav */}
-          <nav className="flex-1 px-2 flex flex-col gap-0.5">
-            {navLinks.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                end={link.to === "/"}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive ? "text-white" : "hover:text-white"
-                  }`
-                }
-                style={({ isActive }) =>
-                  isActive
-                    ? { background: "var(--accent)", color: "white" }
-                    : { color: "var(--text2)" }
-                }
-              >
-                {link.icon}
-                {link.label}
-              </NavLink>
-            ))}
-          </nav>
-
-          {/* Bottom nav */}
-          <div className="px-2 pb-4 flex flex-col gap-0.5" style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px" }}>
-            {bottomLinks.map((link) => (
-              <NavLink
-                key={link.to}
-                to={link.to}
-                className={({ isActive }) =>
-                  `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                    isActive ? "text-white" : "hover:text-white"
-                  }`
-                }
-                style={({ isActive }) =>
-                  isActive
-                    ? { background: "var(--accent)", color: "white" }
-                    : { color: "var(--text2)" }
-                }
-              >
-                {link.icon}
-                {link.label}
-              </NavLink>
-            ))}
-          </div>
-        </aside>
-
-        {/* Main content */}
-        <main className="flex-1 overflow-auto">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/studios" element={<Studios />} />
-            <Route path="/classes" element={<ClassTypes />} />
-            <Route path="/schedule" element={<Schedule />} />
-            <Route path="/customers" element={<Customers />} />
-            <Route path="/plans" element={<Plans />} />
-            <Route path="/teacher" element={<TeacherPortal />} />
-            <Route path="/:slug/book" element={<PublicBooking />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
-      </div>
+        {/* ── Admin / teacher pages (with sidebar) ── */}
+        <Route
+          path="/*"
+          element={
+            <AdminLayout>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/studios" element={<Studios />} />
+                <Route path="/classes" element={<ClassTypes />} />
+                <Route path="/schedule" element={<Schedule />} />
+                <Route path="/customers" element={<Customers />} />
+                <Route path="/plans" element={<Plans />} />
+                <Route path="/teacher" element={<TeacherPortal />} />
+                <Route path="/settings" element={<Settings />} />
+              </Routes>
+            </AdminLayout>
+          }
+        />
+      </Routes>
     </BrowserRouter>
   );
 }

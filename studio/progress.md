@@ -66,3 +66,13 @@ TDD cycle (RED-GREEN-REFACTOR) enforced from first line of application code.
 - 2026-03-15 13:06:00 · Edit · src/validation.ts
 - 2026-03-15 13:07:20 · Write · app/README.md
 - 2026-03-15 13:07:47 · Write · /home/paulh/df5/studiobase/README.md
+- 2026-03-15 13:10:01 · Write · src/components/WeeklyCalendar.tsx
+- 2026-03-15 13:10:29 · Write · src/components/ParticipantList.tsx
+- 2026-03-15 13:11:14 · Write · src/pages/BookingPage.tsx
+- 2026-03-15 13:11:49 · Write · src/pages/MyBookings.tsx
+- 2026-03-15 13:12:24 · Write · src/pages/CreditShop.tsx
+- 2026-03-15 13:13:10 · Write · src/pages/TeacherPortal.tsx
+- 2026-03-15 13:13:45 · Write · src/App.tsx
+- 2026-03-15 13:14:10 · Edit · src/components/ParticipantList.tsx
+- 2026-03-15 13:14:11 · Edit · src/components/ParticipantList.tsx
+- 2026-03-15 13:14:12 · Edit · src/pages/TeacherPortal.tsx
