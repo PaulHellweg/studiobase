@@ -170,7 +170,9 @@ export const CreateCreditPackageSchema = z.object({
   stripePriceId: z.string().optional(),
 });
 
-export const UpdateCreditPackageSchema = CreateCreditPackageSchema.partial();
+export const UpdateCreditPackageSchema = CreateCreditPackageSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
 
 export const AdjustCreditBalanceSchema = z.object({
   userId: z.string().uuid(),
