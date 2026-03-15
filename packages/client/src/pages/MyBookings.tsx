@@ -216,12 +216,27 @@ export default function MyBookings() {
               className="rounded-xl px-4 py-8 text-center"
               style={{ background: "#ffffff", border: "1px solid #e5e7eb" }}
             >
-              <p className="text-sm" style={{ color: "#666" }}>
+              <div
+                className="w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3"
+                style={{ background: "#f3f4f6" }}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="#9ca3af" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium mb-1" style={{ color: "#1a1a1a" }}>
                 Keine kommenden Buchungen
               </p>
-              <p className="text-xs mt-1" style={{ color: "#9ca3af" }}>
-                Buche deinen nächsten Kurs unter /book
+              <p className="text-xs mb-3" style={{ color: "#9ca3af" }}>
+                Buche deinen nächsten Kurs beim Studio deiner Wahl.
               </p>
+              <a
+                href="/book"
+                className="inline-block text-xs font-semibold px-4 py-2 rounded-full"
+                style={{ background: `${ACCENT}15`, color: ACCENT }}
+              >
+                Jetzt buchen →
+              </a>
             </div>
           )}
 

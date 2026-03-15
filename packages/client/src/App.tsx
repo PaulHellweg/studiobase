@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { BrowserRouter, Routes, Route, NavLink, useLocation, Link } from "react-router-dom";
 import Dashboard from "./pages/Dashboard";
 import Studios from "./pages/Studios";
 import ClassTypes from "./pages/ClassTypes";
@@ -15,7 +16,9 @@ import Login from "./pages/Login";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuth } from "./context/AuthContext";
 
-const navLinks = [
+// ─── Nav config ────────────────────────────────────────────────────────────────
+
+const mainNavLinks = [
   {
     to: "/",
     label: "Dashboard",
@@ -61,6 +64,9 @@ const navLinks = [
       </svg>
     ),
   },
+];
+
+const bottomNavLinks = [
   {
     to: "/plans",
     label: "Pakete",
@@ -70,9 +76,6 @@ const navLinks = [
       </svg>
     ),
   },
-];
-
-const bottomLinks = [
   {
     to: "/teacher",
     label: "Lehrer-Portal",
@@ -95,75 +98,127 @@ const bottomLinks = [
 ];
 
 const roleBadgeLabel: Record<string, string> = {
-  tenant_admin: 'Admin',
-  teacher: 'Lehrer',
-  customer: 'Kunde',
+  tenant_admin: "Admin",
+  teacher: "Lehrer",
+  customer: "Kunde",
 };
 
-/** User menu shown at the bottom of the sidebar */
-function UserMenu() {
+// ─── User menu ─────────────────────────────────────────────────────────────────
+
+function UserMenu({ collapsed = false }: { collapsed?: boolean }) {
   const { user, logout } = useAuth();
   if (!user) return null;
 
   const primaryRole = user.roles[0];
   const badgeLabel = primaryRole ? (roleBadgeLabel[primaryRole] ?? primaryRole) : null;
+  const initials = user.email.charAt(0).toUpperCase();
 
   return (
     <div
       className="px-3 py-3 flex items-center gap-2.5"
-      style={{ borderTop: '1px solid var(--border)' }}
+      style={{ borderTop: "1px solid var(--border)" }}
     >
-      {/* Avatar */}
       <div
         className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
-        style={{ background: 'var(--accent)' }}
+        style={{ background: "var(--accent)" }}
       >
-        {user.email.charAt(0).toUpperCase()}
+        {initials}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate" style={{ color: 'var(--text)' }}>
-          {user.email}
-        </p>
-        {badgeLabel && (
-          <span
-            className="inline-block text-[10px] px-1.5 py-0.5 rounded font-medium leading-none mt-0.5"
-            style={{ background: 'color-mix(in srgb, var(--accent) 20%, transparent)', color: 'var(--accent)' }}
-          >
-            {badgeLabel}
-          </span>
-        )}
-      </div>
+      {!collapsed && (
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium truncate" style={{ color: "var(--text)" }}>
+            {user.email}
+          </p>
+          {badgeLabel && (
+            <span
+              className="inline-block text-[10px] px-1.5 py-0.5 rounded font-medium leading-none mt-0.5"
+              style={{
+                background: "color-mix(in srgb, var(--accent) 20%, transparent)",
+                color: "var(--accent)",
+              }}
+            >
+              {badgeLabel}
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Logout button */}
-      <button
-        onClick={logout}
-        title="Abmelden"
-        className="shrink-0 p-1 rounded hover:opacity-70 transition-opacity"
-        style={{ color: 'var(--text2)' }}
-      >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-        </svg>
-      </button>
+      {!collapsed && (
+        <button
+          onClick={logout}
+          title="Abmelden"
+          className="shrink-0 p-1 rounded hover:opacity-70 transition-opacity"
+          style={{ color: "var(--text2)" }}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
 
-/** Admin layout with dark sidebar */
-function AdminLayout({ children }: { children: React.ReactNode }) {
+// ─── Sidebar ───────────────────────────────────────────────────────────────────
+
+function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const location = useLocation();
+
+  // Close sidebar when route changes on mobile
+  useEffect(() => {
+    onClose();
+  }, [location.pathname, onClose]);
+
+  function NavItem({ to, label, icon, end = false }: { to: string; label: string; icon: React.ReactNode; end?: boolean }) {
+    return (
+      <NavLink
+        to={to}
+        end={end}
+        className={({ isActive }) =>
+          `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-all ${
+            isActive ? "text-white" : "hover:text-white"
+          }`
+        }
+        style={({ isActive }) =>
+          isActive
+            ? { background: "var(--accent)", color: "white" }
+            : { color: "var(--text2)" }
+        }
+      >
+        {icon}
+        <span className="truncate">{label}</span>
+      </NavLink>
+    );
+  }
+
   return (
-    <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
-      {/* Sidebar */}
+    <>
+      {/* Mobile overlay */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          style={{ background: "rgba(0,0,0,0.6)" }}
+          onClick={onClose}
+        />
+      )}
+
+      {/* Sidebar panel */}
       <aside
-        className="w-56 flex flex-col shrink-0"
-        style={{ background: "var(--surface)", borderRight: "1px solid var(--border)" }}
+        className="fixed top-0 left-0 h-full z-50 flex flex-col shrink-0 transition-transform duration-200 lg:static lg:translate-x-0"
+        style={{
+          width: 240,
+          background: "var(--surface)",
+          borderRight: "1px solid var(--border)",
+          transform: open ? "translateX(0)" : undefined,
+        }}
+        data-sidebar-open={open}
       >
         {/* Logo */}
-        <div className="px-4 py-5 mb-2">
+        <div className="px-4 py-5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div
-              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
               style={{ background: "var(--accent)" }}
             >
               SB
@@ -172,9 +227,19 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
               StudioBase
             </span>
           </div>
+          {/* Close button on mobile */}
+          <button
+            onClick={onClose}
+            className="lg:hidden p-1 rounded hover:opacity-70"
+            style={{ color: "var(--text2)" }}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         </div>
 
-        {/* Nav section label */}
+        {/* Section label */}
         <div className="px-4 mb-1">
           <span className="text-xs font-medium uppercase tracking-widest" style={{ color: "var(--text2)" }}>
             Admin
@@ -182,64 +247,153 @@ function AdminLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Main nav */}
-        <nav className="flex-1 px-2 flex flex-col gap-0.5">
-          {navLinks.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              end={link.to === "/"}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive ? "text-white" : "hover:text-white"
-                }`
-              }
-              style={({ isActive }) =>
-                isActive
-                  ? { background: "var(--accent)", color: "white" }
-                  : { color: "var(--text2)" }
-              }
-            >
-              {link.icon}
-              {link.label}
-            </NavLink>
+        <nav className="flex-1 px-2 flex flex-col gap-0.5 overflow-y-auto">
+          {mainNavLinks.map((link) => (
+            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} end={link.to === "/"} />
           ))}
         </nav>
 
         {/* Bottom nav */}
-        <div
-          className="px-2 flex flex-col gap-0.5"
-          style={{ borderTop: "1px solid var(--border)", paddingTop: "12px", marginTop: "8px", paddingBottom: "8px" }}
-        >
-          {bottomLinks.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                `flex items-center gap-2.5 px-3 py-2 rounded-md text-sm transition-colors ${
-                  isActive ? "text-white" : "hover:text-white"
-                }`
-              }
-              style={({ isActive }) =>
-                isActive
-                  ? { background: "var(--accent)", color: "white" }
-                  : { color: "var(--text2)" }
-              }
-            >
-              {link.icon}
-              {link.label}
-            </NavLink>
+        <div className="px-2 flex flex-col gap-0.5 pb-2 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+          {bottomNavLinks.map((link) => (
+            <NavItem key={link.to} to={link.to} label={link.label} icon={link.icon} />
           ))}
         </div>
 
         {/* User menu */}
         <UserMenu />
       </aside>
+    </>
+  );
+}
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">{children}</main>
+// ─── Mobile bottom tab bar ─────────────────────────────────────────────────────
+
+function MobileTabBar() {
+  const topFive = mainNavLinks.slice(0, 5);
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 flex lg:hidden"
+      style={{ background: "var(--surface)", borderTop: "1px solid var(--border)" }}
+    >
+      {topFive.map((link) => (
+        <NavLink
+          key={link.to}
+          to={link.to}
+          end={link.to === "/"}
+          className="flex-1 flex flex-col items-center gap-1 py-2 text-center"
+          style={({ isActive }) => ({
+            color: isActive ? "var(--accent)" : "var(--text2)",
+          })}
+        >
+          {link.icon}
+          <span className="text-[10px] font-medium leading-none">{link.label}</span>
+        </NavLink>
+      ))}
+    </nav>
+  );
+}
+
+// ─── Admin layout ──────────────────────────────────────────────────────────────
+
+function AdminLayout({ children }: { children: React.ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  return (
+    <div className="flex min-h-screen" style={{ background: "var(--bg)", color: "var(--text)" }}>
+      {/* Desktop sidebar always visible; mobile toggleable */}
+      <div className="hidden lg:flex lg:shrink-0">
+        <Sidebar open={true} onClose={() => undefined} />
+      </div>
+
+      {/* Mobile sidebar */}
+      <div className="lg:hidden">
+        <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      </div>
+
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile header bar */}
+        <header
+          className="flex items-center gap-3 px-4 py-3 lg:hidden sticky top-0 z-30"
+          style={{ background: "var(--surface)", borderBottom: "1px solid var(--border)" }}
+        >
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-1.5 rounded-md"
+            style={{ color: "var(--text2)" }}
+            aria-label="Menü öffnen"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <div className="flex items-center gap-2">
+            <div
+              className="w-6 h-6 rounded-md flex items-center justify-center text-white text-[10px] font-bold"
+              style={{ background: "var(--accent)" }}
+            >
+              SB
+            </div>
+            <span className="font-semibold text-sm" style={{ color: "var(--text)" }}>
+              StudioBase
+            </span>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main className="flex-1 overflow-auto pb-20 lg:pb-0">{children}</main>
+      </div>
+
+      {/* Mobile bottom tabs */}
+      <MobileTabBar />
     </div>
   );
 }
+
+// ─── Public nav ────────────────────────────────────────────────────────────────
+
+function PublicTopNav({ backHref, backLabel = "Zurück" }: { backHref?: string; backLabel?: string }) {
+  return (
+    <header
+      className="sticky top-0 z-30 flex items-center justify-between px-4 py-3"
+      style={{ background: "#ffffff", borderBottom: "1px solid #e5e7eb" }}
+    >
+      <div className="flex items-center gap-2">
+        <div
+          className="w-7 h-7 rounded-lg flex items-center justify-center text-white text-xs font-bold"
+          style={{ background: "#6366f1" }}
+        >
+          SB
+        </div>
+        <span className="font-semibold text-sm" style={{ color: "#1a1a1a" }}>
+          StudioBase
+        </span>
+      </div>
+      {backHref && (
+        <Link
+          to={backHref}
+          className="text-xs font-medium px-3 py-1.5 rounded-full"
+          style={{ background: "#f3f4f6", color: "#666" }}
+        >
+          ← {backLabel}
+        </Link>
+      )}
+    </header>
+  );
+}
+
+// Wrapper component for public routes that need the nav
+function PublicLayout({ children, backHref, backLabel }: { children: React.ReactNode; backHref?: string; backLabel?: string }) {
+  return (
+    <div className="min-h-screen" style={{ background: "#fafafa" }}>
+      <PublicTopNav backHref={backHref} backLabel={backLabel} />
+      {children}
+    </div>
+  );
+}
+
+// ─── Root app ─────────────────────────────────────────────────────────────────
 
 export default function App() {
   return (
@@ -248,7 +402,7 @@ export default function App() {
         {/* ── Auth ── */}
         <Route path="/login" element={<Login />} />
 
-        {/* ── Public customer-facing pages (no auth required) ── */}
+        {/* ── Public customer-facing pages (no sidebar) ── */}
         <Route path="/:slug/book" element={<BookingPage />} />
         <Route path="/:slug/credits" element={<CreditShop />} />
 
@@ -262,8 +416,15 @@ export default function App() {
           }
         />
 
-        {/* ── Legacy public booking stub (keep for backwards compat) ── */}
-        <Route path="/:slug/book-legacy" element={<PublicBooking />} />
+        {/* ── Legacy public booking stub ── */}
+        <Route
+          path="/:slug/book-legacy"
+          element={
+            <PublicLayout backLabel="Startseite">
+              <PublicBooking />
+            </PublicLayout>
+          }
+        />
 
         {/* ── Admin / teacher pages (with sidebar) ── */}
         <Route

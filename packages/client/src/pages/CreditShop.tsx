@@ -1,6 +1,7 @@
 import { useParams } from "react-router-dom";
 import { trpc } from "../lib/trpc";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../context/AuthContext";
 
 const ACCENT = "#6366f1";
 
@@ -128,6 +129,11 @@ function PackageCard({
 export default function CreditShop() {
   const { slug } = useParams<{ slug: string }>();
   const { showToast } = useToast();
+  useAuth(); // Ensures auth context is available for future use
+
+  // Detect Stripe return — show success message
+  const searchParams = new URLSearchParams(window.location.search);
+  const paymentStatus = searchParams.get("payment");
 
   const { data: balance } = trpc.credit.balance.get.useQuery(undefined, { retry: false });
 
@@ -231,6 +237,31 @@ export default function CreditShop() {
             </svg>
           </div>
         </div>
+
+        {/* Payment success banner */}
+        {paymentStatus === "success" && (
+          <div
+            className="rounded-2xl px-5 py-4 mb-6 flex items-center gap-4"
+            style={{ background: "#dcfce7", border: "1px solid #86efac" }}
+          >
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+              style={{ background: "#16a34a" }}
+            >
+              <svg className="w-5 h-5" fill="none" stroke="white" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-semibold text-sm" style={{ color: "#14532d" }}>
+                Zahlung erfolgreich!
+              </p>
+              <p className="text-xs" style={{ color: "#166534" }}>
+                Dein Guthaben wurde aufgeladen.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Packages */}
         {isLoading && (

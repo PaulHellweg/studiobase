@@ -4,6 +4,11 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { trpc } from "../lib/trpc";
 import { useToast } from "../components/Toast";
+import ConfirmDialog from "../components/ConfirmDialog";
+import EmptyState from "../components/EmptyState";
+import { SkeletonBox } from "../components/Skeleton";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 type Room = {
   id: string;
@@ -21,6 +26,8 @@ type Studio = {
   rooms: Room[];
 };
 
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+
 const studioSchema = z.object({
   name: z.string().min(2, "Mindestens 2 Zeichen").max(100, "Maximal 100 Zeichen"),
   address: z.string().min(5, "Mindestens 5 Zeichen").max(200, "Maximal 200 Zeichen"),
@@ -29,24 +36,27 @@ const studioSchema = z.object({
 
 type StudioFormData = z.infer<typeof studioSchema>;
 
+// ─── Field error ──────────────────────────────────────────────────────────────
+
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="text-xs mt-1" style={{ color: "#f87171" }}>{message}</p>;
 }
 
-function ServerError({ message }: { message: string }) {
-  return (
-    <div
-      className="rounded-lg px-4 py-3 text-sm flex items-center gap-2"
-      style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
-    >
-      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      {message}
-    </div>
-  );
-}
+// ─── Input style helper ───────────────────────────────────────────────────────
+
+const inputBase: React.CSSProperties = {
+  background: "var(--surface2)",
+  border: "1px solid var(--border)",
+  color: "var(--text)",
+};
+
+const inputError: React.CSSProperties = {
+  ...inputBase,
+  border: "1px solid #f87171",
+};
+
+// ─── Studio form ──────────────────────────────────────────────────────────────
 
 function StudioForm({
   initial,
@@ -59,11 +69,7 @@ function StudioForm({
   onCancel: () => void;
   loading: boolean;
 }) {
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<StudioFormData>({
+  const { register, handleSubmit, formState: { errors } } = useForm<StudioFormData>({
     resolver: zodResolver(studioSchema),
     defaultValues: {
       name: initial?.name ?? "",
@@ -72,52 +78,31 @@ function StudioForm({
     },
   });
 
-  const inputStyle = {
-    background: "var(--surface2)",
-    border: "1px solid var(--border)",
-    color: "var(--text)",
-  };
-
-  const errorInputStyle = {
-    ...inputStyle,
-    border: "1px solid #f87171",
-  };
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
-          Name
-        </label>
+        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>Name</label>
         <input
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1"
-          style={errors.name ? errorInputStyle : { ...inputStyle, outlineColor: "var(--accent)" }}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={errors.name ? inputError : inputBase}
           placeholder="z.B. Studio Mitte"
           {...register("name")}
         />
         <FieldError message={errors.name?.message} />
       </div>
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
-          Adresse
-        </label>
+        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>Adresse</label>
         <input
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none focus:ring-1"
-          style={errors.address ? errorInputStyle : { ...inputStyle, outlineColor: "var(--accent)" }}
+          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+          style={errors.address ? inputError : inputBase}
           placeholder="Straße, PLZ Stadt"
           {...register("address")}
         />
         <FieldError message={errors.address?.message} />
       </div>
       <div>
-        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>
-          Zeitzone
-        </label>
-        <select
-          className="w-full px-3 py-2 rounded-lg text-sm outline-none"
-          style={inputStyle}
-          {...register("timezone")}
-        >
+        <label className="block text-xs font-medium mb-1" style={{ color: "var(--text2)" }}>Zeitzone</label>
+        <select className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={inputBase} {...register("timezone")}>
           <option value="Europe/Berlin">Europe/Berlin</option>
           <option value="Europe/Vienna">Europe/Vienna</option>
           <option value="Europe/Zurich">Europe/Zurich</option>
@@ -128,7 +113,7 @@ function StudioForm({
         <button
           type="submit"
           disabled={loading}
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white transition-opacity disabled:opacity-50"
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50"
           style={{ background: "var(--accent)" }}
         >
           {loading ? "Wird gespeichert…" : "Speichern"}
@@ -136,7 +121,7 @@ function StudioForm({
         <button
           type="button"
           onClick={onCancel}
-          className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+          className="px-4 py-2 rounded-lg text-sm font-medium"
           style={{ color: "var(--text2)", background: "var(--surface2)" }}
         >
           Abbrechen
@@ -146,92 +131,128 @@ function StudioForm({
   );
 }
 
-function StudioCard({ studio, onEdit }: { studio: Studio; onEdit: (s: Studio) => void }) {
+// ─── Room list (read-only display) ───────────────────────────────────────────
+
+function RoomList({ rooms }: { rooms: Room[] }) {
+  const activeRooms = rooms.filter((r) => r.isActive);
+
+  return (
+    <div className="pt-4" style={{ borderTop: "1px solid var(--border)" }}>
+      <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text2)" }}>
+        Räume ({activeRooms.length})
+      </p>
+      <div className="space-y-2">
+        {activeRooms.length === 0 && (
+          <p className="text-xs py-2" style={{ color: "var(--text2)" }}>
+            Keine aktiven Räume — ein Standard-Raum wird beim Anlegen automatisch erstellt
+          </p>
+        )}
+        {activeRooms.map((room) => (
+          <div
+            key={room.id}
+            className="flex items-center gap-3 px-3 py-2 rounded-lg"
+            style={{ background: "var(--surface2)" }}
+          >
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: "var(--text2)" }}>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5" />
+            </svg>
+            <span className="flex-1 text-sm" style={{ color: "var(--text)" }}>{room.name}</span>
+            <span className="text-xs px-2 py-0.5 rounded" style={{ background: "var(--surface)", color: "var(--text2)" }}>
+              {room.capacity} Plätze
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Studio card ──────────────────────────────────────────────────────────────
+
+function StudioCard({
+  studio,
+  onEdit,
+  onDelete,
+}: {
+  studio: Studio;
+  onEdit: (s: Studio) => void;
+  onDelete: (s: Studio) => void;
+}) {
   const [expanded, setExpanded] = useState(false);
 
   return (
     <div
       className="rounded-xl"
-      style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+      style={{ background: "var(--surface)", border: "1px solid var(--border)", opacity: studio.isActive ? 1 : 0.6 }}
     >
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-sm" style={{ color: "var(--text)" }}>
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold text-white shrink-0"
+                style={{ background: "var(--accent)" }}
+              >
+                {studio.name.charAt(0).toUpperCase()}
+              </div>
+              <h3 className="font-semibold text-sm truncate" style={{ color: "var(--text)" }}>
                 {studio.name}
               </h3>
               {!studio.isActive && (
-                <span
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: "var(--surface2)", color: "var(--text2)" }}
-                >
+                <span className="text-xs px-2 py-0.5 rounded-full shrink-0" style={{ background: "var(--surface2)", color: "var(--text2)" }}>
                   Inaktiv
                 </span>
               )}
             </div>
-            <p className="text-xs mb-1" style={{ color: "var(--text2)" }}>
+            <p className="text-xs truncate" style={{ color: "var(--text2)", marginLeft: "2.5rem" }}>
               {studio.address}
             </p>
-            <p className="text-xs" style={{ color: "var(--text2)" }}>
-              {studio.rooms.length} Räume · {studio.timezone}
+            <p className="text-xs mt-0.5" style={{ color: "var(--text2)", marginLeft: "2.5rem" }}>
+              {studio.rooms.filter((r) => r.isActive).length} Räume · {studio.timezone}
             </p>
           </div>
+
           <div className="flex gap-2 shrink-0">
             <button
               onClick={() => setExpanded(!expanded)}
-              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg"
               style={{ color: "var(--text2)", background: "var(--surface2)" }}
             >
-              {expanded ? "Zuklappen" : "Räume"}
+              {expanded ? "Schließen" : "Räume"}
             </button>
             <button
               onClick={() => onEdit(studio)}
-              className="text-xs px-3 py-1.5 rounded-lg transition-colors"
+              className="text-xs px-3 py-1.5 rounded-lg"
               style={{ color: "var(--text2)", background: "var(--surface2)" }}
             >
               Bearbeiten
+            </button>
+            <button
+              onClick={() => onDelete(studio)}
+              className="text-xs px-3 py-1.5 rounded-lg"
+              style={{ color: "#f87171", background: "var(--surface2)" }}
+            >
+              Löschen
             </button>
           </div>
         </div>
       </div>
 
       {expanded && (
-        <div
-          className="px-5 pb-5 pt-0"
-          style={{ borderTop: "1px solid var(--border)" }}
-        >
-          <p className="text-xs font-medium uppercase tracking-wider mt-4 mb-3" style={{ color: "var(--text2)" }}>
-            Räume
-          </p>
-          <div className="space-y-2">
-            {studio.rooms.length === 0 && (
-              <p className="text-xs" style={{ color: "var(--text2)" }}>Keine Räume angelegt</p>
-            )}
-            {studio.rooms.map((room) => (
-              <div
-                key={room.id}
-                className="flex items-center justify-between px-3 py-2 rounded-lg"
-                style={{ background: "var(--surface2)" }}
-              >
-                <span className="text-sm" style={{ color: "var(--text)" }}>
-                  {room.name}
-                </span>
-                <span className="text-xs" style={{ color: "var(--text2)" }}>
-                  {room.capacity} Plätze
-                </span>
-              </div>
-            ))}
-          </div>
+        <div className="px-5 pb-5">
+          <RoomList rooms={studio.rooms} />
         </div>
       )}
     </div>
   );
 }
 
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function Studios() {
   const [showForm, setShowForm] = useState(false);
   const [editStudio, setEditStudio] = useState<Studio | null>(null);
+  const [deleteStudio, setDeleteStudio] = useState<Studio | null>(null);
   const { showToast } = useToast();
 
   const { data, isLoading, isError, refetch } = trpc.studio.list.useQuery(
@@ -245,32 +266,36 @@ export default function Studios() {
       void refetch();
       showToast("Studio erfolgreich angelegt", "success");
     },
-    onError: (err) => {
-      showToast(`Fehler: ${err.message}`, "error");
-    },
+    onError: (err) => showToast(`Fehler: ${err.message}`, "error"),
   });
 
   const updateMutation = trpc.studio.update.useMutation({
     onSuccess: () => {
       setEditStudio(null);
       void refetch();
-      showToast("Studio erfolgreich aktualisiert", "success");
+      showToast("Studio aktualisiert", "success");
     },
-    onError: (err) => {
-      showToast(`Fehler: ${err.message}`, "error");
-    },
+    onError: (err) => showToast(`Fehler: ${err.message}`, "error"),
   });
 
+  const softDeleteMutation = trpc.studio.delete.useMutation({
+    onSuccess: () => {
+      setDeleteStudio(null);
+      void refetch();
+      showToast("Studio deaktiviert", "success");
+    },
+    onError: (err) => showToast(`Fehler: ${err.message}`, "error"),
+  });
+
+  const studios = data?.items ?? [];
+
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-6 lg:p-8 max-w-4xl">
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--text)" }}>
-            Studios
-          </h1>
-          <p className="text-sm" style={{ color: "var(--text2)" }}>
-            Standorte und Räume verwalten
-          </p>
+          <h1 className="text-2xl font-bold mb-1" style={{ color: "var(--text)" }}>Studios</h1>
+          <p className="text-sm" style={{ color: "var(--text2)" }}>Standorte und Räume verwalten</p>
         </div>
         {!showForm && !editStudio && (
           <button
@@ -287,8 +312,14 @@ export default function Studios() {
       </div>
 
       {isError && (
-        <div className="mb-6">
-          <ServerError message="Server nicht erreichbar — Studios können nicht geladen werden." />
+        <div
+          className="rounded-lg px-4 py-3 text-sm mb-6 flex items-center gap-2"
+          style={{ background: "var(--surface2)", border: "1px solid var(--border)", color: "var(--text2)" }}
+        >
+          <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          Server nicht erreichbar — Studios können nicht geladen werden.
         </div>
       )}
 
@@ -298,19 +329,12 @@ export default function Studios() {
           className="rounded-xl p-5 mb-6"
           style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
         >
-          <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--text)" }}>
-            Neues Studio
-          </h2>
+          <h2 className="text-sm font-semibold mb-4" style={{ color: "var(--text)" }}>Neues Studio</h2>
           <StudioForm
-            onSubmit={(data) => createMutation.mutate(data)}
+            onSubmit={(d) => createMutation.mutate(d)}
             onCancel={() => setShowForm(false)}
             loading={createMutation.isPending}
           />
-          {createMutation.isError && (
-            <p className="text-xs mt-2" style={{ color: "#f87171" }}>
-              Fehler: {createMutation.error.message}
-            </p>
-          )}
         </div>
       )}
 
@@ -325,17 +349,10 @@ export default function Studios() {
           </h2>
           <StudioForm
             initial={editStudio}
-            onSubmit={(data) =>
-              updateMutation.mutate({ studioId: editStudio.id, data })
-            }
+            onSubmit={(d) => updateMutation.mutate({ studioId: editStudio.id, data: d })}
             onCancel={() => setEditStudio(null)}
             loading={updateMutation.isPending}
           />
-          {updateMutation.isError && (
-            <p className="text-xs mt-2" style={{ color: "#f87171" }}>
-              Fehler: {updateMutation.error.message}
-            </p>
-          )}
         </div>
       )}
 
@@ -343,38 +360,51 @@ export default function Studios() {
       {isLoading && (
         <div className="space-y-3">
           {[1, 2].map((i) => (
-            <div
-              key={i}
-              className="h-24 rounded-xl animate-pulse"
-              style={{ background: "var(--surface)" }}
-            />
+            <SkeletonBox key={i} height="6rem" rounded="xl" className="w-full" />
           ))}
         </div>
       )}
 
-      {data && (
-        <div className="space-y-3">
-          {data.items.length === 0 && (
-            <div
-              className="rounded-xl px-5 py-10 text-center"
-              style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
-            >
-              <p className="text-sm" style={{ color: "var(--text2)" }}>
-                Noch keine Studios angelegt
-              </p>
-            </div>
-          )}
-          {data.items.map((studio) => (
-            <StudioCard
-              key={studio.id}
-              studio={studio}
-              onEdit={(s) => {
-                setEditStudio(s);
-                setShowForm(false);
-              }}
-            />
-          ))}
+      {!isLoading && !isError && studios.length === 0 && !showForm && (
+        <div
+          className="rounded-xl"
+          style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
+        >
+          <EmptyState
+            title="Noch keine Studios angelegt"
+            description="Füge deinen ersten Standort hinzu, um zu starten."
+            icon={
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16" />
+              </svg>
+            }
+            action={{ label: "Studio hinzufügen", onClick: () => setShowForm(true) }}
+          />
         </div>
+      )}
+
+      <div className="space-y-3">
+        {studios.map((studio) => (
+          <StudioCard
+            key={studio.id}
+            studio={studio}
+            onEdit={(s) => { setEditStudio(s); setShowForm(false); }}
+            onDelete={setDeleteStudio}
+          />
+        ))}
+      </div>
+
+      {/* Confirm delete dialog */}
+      {deleteStudio && (
+        <ConfirmDialog
+          title="Studio deaktivieren"
+          message={`Möchtest du "${deleteStudio.name}" wirklich deaktivieren? Das Studio wird nicht gelöscht, aber aus der aktiven Ansicht entfernt.`}
+          confirmLabel="Deaktivieren"
+          variant="danger"
+          loading={softDeleteMutation.isPending}
+          onConfirm={() => softDeleteMutation.mutate({ studioId: deleteStudio.id })}
+          onCancel={() => setDeleteStudio(null)}
+        />
       )}
     </div>
   );

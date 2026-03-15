@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { trpc } from "../lib/trpc";
 import { useToast } from "../components/Toast";
+import { useAuth } from "../context/AuthContext";
 import WeeklyCalendar, {
   CalendarInstance,
   getWeekBounds,
@@ -44,20 +45,26 @@ function PublicNav({ studioName, slug }: { studioName?: string; slug: string }) 
 function BookingModal({
   instance,
   balance,
+  isAuthenticated,
   onClose,
   onConfirm,
+  onLogin,
   isBooking,
   bookingSuccess,
+  slug,
 }: {
   instance: CalendarInstance;
   balance: number;
+  isAuthenticated: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  onLogin: () => void;
   isBooking: boolean;
   bookingSuccess: boolean;
+  slug: string;
 }) {
   const creditCost = instance.classType.creditCost ?? 0;
-  const canBook = balance >= creditCost;
+  const canBook = isAuthenticated && balance >= creditCost;
   const booked = instance._count?.bookings ?? 0;
   const spotsLeft = instance.maxCapacity - booked;
   const accent = instance.classType.color ?? ACCENT;
@@ -147,32 +154,74 @@ function BookingModal({
               )}
             </div>
 
-            {!canBook && creditCost > 0 && (
-              <p className="text-xs text-center mb-4" style={{ color: "#ef4444" }}>
-                Nicht genug Credits.{" "}
-                <a href="#credits" style={{ color: ACCENT, textDecoration: "underline" }}>
-                  Credits kaufen →
-                </a>
-              </p>
+            {!isAuthenticated ? (
+              <>
+                <div
+                  className="rounded-xl p-4 mb-4 text-center"
+                  style={{ background: "#fef3c7", border: "1px solid #fcd34d" }}
+                >
+                  <p className="text-sm font-medium mb-1" style={{ color: "#92400e" }}>
+                    Bitte anmelden
+                  </p>
+                  <p className="text-xs" style={{ color: "#b45309" }}>
+                    Du musst angemeldet sein, um Kurse zu buchen.
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-3 rounded-xl text-sm font-medium"
+                    style={{ background: "#f3f4f6", color: "#666" }}
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={onLogin}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white"
+                    style={{ background: ACCENT }}
+                  >
+                    Anmelden
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                {!canBook && creditCost > 0 && (
+                  <div
+                    className="rounded-xl p-3 mb-4 text-center"
+                    style={{ background: "#fef2f2", border: "1px solid #fecaca" }}
+                  >
+                    <p className="text-xs mb-1" style={{ color: "#ef4444" }}>
+                      Nicht genug Credits ({balance} von {creditCost} benötigt)
+                    </p>
+                    <a
+                      href={`/${slug}/credits`}
+                      className="text-xs font-semibold"
+                      style={{ color: ACCENT, textDecoration: "underline" }}
+                    >
+                      Credits kaufen →
+                    </a>
+                  </div>
+                )}
+                <div className="flex gap-3">
+                  <button
+                    onClick={onClose}
+                    className="flex-1 py-3 rounded-xl text-sm font-medium"
+                    style={{ background: "#f3f4f6", color: "#666" }}
+                  >
+                    Abbrechen
+                  </button>
+                  <button
+                    onClick={onConfirm}
+                    disabled={!canBook || isBooking}
+                    className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
+                    style={{ background: ACCENT }}
+                  >
+                    {isBooking ? "Wird gebucht…" : "Buchen"}
+                  </button>
+                </div>
+              </>
             )}
-
-            <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 py-3 rounded-xl text-sm font-medium"
-                style={{ background: "#f3f4f6", color: "#666" }}
-              >
-                Abbrechen
-              </button>
-              <button
-                onClick={onConfirm}
-                disabled={!canBook || isBooking}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
-                style={{ background: ACCENT }}
-              >
-                {isBooking ? "Wird gebucht…" : "Buchen"}
-              </button>
-            </div>
           </>
         )}
       </div>
@@ -189,13 +238,14 @@ export default function BookingPage() {
 
   const { monday, sunday } = getWeekBounds(weekOffset);
   const { showToast } = useToast();
+  const { isAuthenticated, login } = useAuth();
 
   const { data: instances, isLoading, isError, refetch } = trpc.schedule.listInstances.useQuery(
     { from: monday, to: sunday },
     { retry: false }
   );
 
-  const { data: balance } = trpc.credit.balance.get.useQuery(undefined, { retry: false });
+  const { data: balance } = trpc.credit.balance.get.useQuery(undefined, { enabled: isAuthenticated, retry: false });
 
   const bookMutation = trpc.booking.create.useMutation({
     onSuccess: () => {
@@ -322,10 +372,13 @@ export default function BookingPage() {
         <BookingModal
           instance={selectedInstance}
           balance={creditBalance}
+          isAuthenticated={isAuthenticated}
           onClose={handleClose}
           onConfirm={handleBook}
+          onLogin={login}
           isBooking={bookMutation.isPending}
           bookingSuccess={bookingSuccess}
+          slug={slug ?? ""}
         />
       )}
     </div>
