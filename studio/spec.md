@@ -1,7 +1,7 @@
 # StudioBase — Product Requirements Specification
 
-**Status:** approved
-**Phase:** 01 complete
+**Status:** awaiting_approval
+**Phase:** 01 (updated for v2 stack)
 
 ---
 
@@ -64,18 +64,20 @@ StudioBase is a multi-tenant SaaS booking platform designed for class-based busi
 
 ### Row-Level Tenant Isolation
 - Every core database table carries a `tenantId` column.
-- All queries are scoped by `tenantId` extracted from the Keycloak JWT claim.
+- PostgreSQL Row-Level Security (RLS) enforces tenant isolation at the database layer via Drizzle ORM's `pgPolicy()`.
+- All queries are scoped by `tenantId` extracted from the Better-Auth session claim.
 - No cross-tenant data leakage is architecturally possible at the query layer.
 
 ### Authentication
-- Keycloak 24 handles all authentication via PKCE OAuth2 flow.
-- Custom protocol mappers inject `tenantId` and `roles` into the JWT.
-- The server validates tokens on every request; no session state is held server-side.
+- Better-Auth handles all authentication with the Organization plugin for multi-tenant RBAC.
+- TypeScript-native session management; no separate auth server required.
+- JWT sessions are validated on every request; no server-side session state.
+- `tenantId` and `roles` are stored in the Better-Auth session object.
 
 ### PII Encryption at Rest
 - Customer names, email addresses, and phone numbers are encrypted at rest using AES-256.
 - Encryption keys are stored in environment variables (rotatable).
-- Encrypted fields are decrypted only at the application layer, never in SQL.
+- Encrypted fields are decrypted via Drizzle middleware/custom wrapper at the application layer, never in SQL.
 
 ### DSGVO (GDPR) Compliance
 - Customers can request full data export (JSON).
@@ -97,12 +99,18 @@ StudioBase is a multi-tenant SaaS booking platform designed for class-based busi
 ## Technical Constraints
 
 ### Development Environment
-- Docker Compose provides: PostgreSQL 16, Keycloak 24, Mailpit (local SMTP).
+- Docker Compose provides: PostgreSQL 16, Mailpit (local SMTP).
 - No external services required to run locally.
 
 ### Quality
 - TDD enforced in Phase 05 (RED-GREEN-REFACTOR with Vitest).
+- E2E testing with Playwright.
 - All business logic covered by unit tests before shipping.
+
+### Design System
+- Distinctive visual identity defined in Phase 02a via `design-brief.md`.
+- Component library: shadcn/ui + Aceternity UI for advanced interactions.
+- Tailwind CSS v4 with `@theme` and OKLCH color tokens.
 
 ### UX
 - Mobile-first responsive design.
@@ -117,14 +125,17 @@ StudioBase is a multi-tenant SaaS booking platform designed for class-based busi
 |---|---|
 | Frontend | React 18 + Vite |
 | API | tRPC v11 over Express |
-| Auth | Keycloak 24 (PKCE) |
+| Auth | Better-Auth (Organization plugin) |
 | Database | PostgreSQL 16 |
-| ORM | Prisma 5 |
+| ORM | Drizzle ORM (native RLS via pgPolicy) |
+| Tenant Isolation | PostgreSQL Row-Level Security (RLS) |
 | Payments | Stripe (Checkout + Billing) |
-| Styling | Tailwind CSS |
+| Styling | Tailwind CSS v4 + shadcn/ui + Aceternity UI |
 | i18n | i18next |
-| Testing | Vitest |
+| Testing | Vitest + Playwright (E2E) |
+| Monorepo | pnpm + Turborepo |
 | Dev infra | Docker Compose |
+| MCP Tools | mcp2cli (GitHub, DB, Docs, Browser) |
 
 ---
 

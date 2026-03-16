@@ -1,178 +1,379 @@
-# StudioBase — Architecture
+# StudioBase v2 — Architecture Layout
 
-**Status:** approved
-**Phase:** 02 / 03 / 04 complete
-
----
-
-## Monorepo Structure
-
-```
-studiobase/
-├── packages/
-│   ├── server/          # Express + tRPC API server
-│   │   ├── src/
-│   │   │   ├── routers/       # tRPC routers (one file per domain)
-│   │   │   ├── middleware/    # tenantProcedure, auth, error handling
-│   │   │   ├── services/      # Business logic (pure functions, testable)
-│   │   │   ├── lib/           # Prisma client, Stripe client, Keycloak verifier
-│   │   │   └── index.ts       # Express app entry point
-│   │   └── __tests__/
-│   ├── client/          # React 18 + Vite SPA
-│   │   ├── src/
-│   │   │   ├── pages/         # Route-level components
-│   │   │   ├── components/    # Shared UI components
-│   │   │   ├── hooks/         # Custom React hooks (trpc, auth, i18n)
-│   │   │   ├── lib/           # trpc client, keycloak-js init
-│   │   │   └── i18n/          # Translation JSON files (de, en)
-│   │   └── index.html
-│   └── shared/          # Shared TypeScript types and Zod schemas
-│       └── src/
-│           ├── types/         # Inferred Prisma types, domain types
-│           └── validation/    # Zod schemas for inputs (reused server + client)
-├── prisma/
-│   ├── schema.prisma
-│   └── migrations/
-├── docker-compose.yml
-├── pnpm-workspace.yaml
-└── package.json
-```
+**Phase:** 02b
+**Design Direction:** A — "Warm Stone"
+**Status:** awaiting_approval
 
 ---
 
-## Database — 15 Tables
+## 1. Pages by Actor
 
-All core tables carry `tenantId` (UUID, non-nullable, indexed).
+### Public (no auth required)
 
-| Table | Purpose |
-|---|---|
-| `Tenant` | One row per studio. Stores name, slug, locale, plan. |
-| `User` | Platform user. Links to Keycloak subject (`keycloakId`). Encrypted PII. |
-| `TenantMembership` | Join table: User ↔ Tenant with role assignment. |
-| `Studio` | Studio profile per tenant (address, description, logo). |
-| `ClassType` | Template for a class (name, duration, capacity, credit cost). |
-| `Teacher` | Teacher profile linked to a User. |
-| `Schedule` | A recurring or one-off schedule entry (classType, teacher, time, status). |
-| `ScheduleInstance` | A concrete occurrence of a Schedule on a specific date. |
-| `Booking` | Customer booking of a ScheduleInstance. Status: confirmed/cancelled/attended. |
-| `Waitlist` | Waitlist entries per ScheduleInstance. FIFO by `createdAt`. |
-| `CreditPack` | Definition of a credit pack (quantity, price, expiry days). |
-| `CreditLedger` | Append-only ledger of credit grants and debits per customer per tenant. |
-| `Subscription` | Stripe subscription record linked to a customer and tenant. |
-| `Payment` | Stripe payment/charge record. |
-| `AuditLog` | Append-only event log. Purged after 90 days. |
-
----
-
-## Auth — Keycloak PKCE Flow
-
-```
-Browser → Keycloak /authorize (PKCE)
-        ← authorization_code
-Browser → Keycloak /token
-        ← access_token (JWT) + refresh_token
-Browser → Express API (Authorization: Bearer <token>)
-Express → verifyToken() → decode + verify signature
-        → extract tenantId claim + roles claim
-        → attach to tRPC context
-```
-
-### Custom Protocol Mappers (Keycloak realm config)
-- `tenantId` — hardcoded per client registration or user attribute; injected into token
-- `roles` — tenant-scoped roles array (`tenant_admin`, `teacher`, `customer`)
-
-### Token Verification (server)
-- `jwks-rsa` fetches Keycloak public keys on startup and caches them.
-- Every request verifies signature, expiry, and issuer.
-- Expired tokens → 401; missing `tenantId` → 403.
-
----
-
-## tRPC Routers
-
-| Router | Procedures | Access |
+| Page | Route | Purpose |
 |---|---|---|
-| `tenant` | `create`, `get`, `update`, `listMembers` | super_admin |
-| `studio` | `get`, `update` | tenant_admin |
-| `classType` | `create`, `list`, `update`, `archive` | tenant_admin |
-| `schedule` | `create`, `list`, `update`, `publish`, `cancel` | tenant_admin |
-| `booking` | `create`, `cancel`, `list`, `markAttended` | customer / teacher |
-| `credit` | `getBalance`, `listLedger`, `grantManual` | customer / tenant_admin |
-| `payment` | `createCheckoutSession`, `createPortalSession`, `webhook` | customer / stripe |
-| `user` | `me`, `updateProfile`, `requestExport`, `requestDeletion` | authenticated |
+| Studio Landing | `/:tenantSlug` | Public studio page — branding, description, location |
+| Class Schedule | `/:tenantSlug/schedule` | Browse available classes by day/week |
+| Class Detail | `/:tenantSlug/class/:classId` | Class description, teacher, time, spots remaining |
+| Login | `/auth/login` | Email/password + social login via Better-Auth |
+| Register | `/auth/register` | Account creation |
+| Forgot Password | `/auth/forgot-password` | Password reset flow |
+
+### Customer (`customer` role)
+
+| Page | Route | Purpose |
+|---|---|---|
+| My Bookings | `/bookings` | Upcoming and past bookings |
+| Booking Detail | `/bookings/:bookingId` | Single booking + cancel option |
+| Credits & Subscriptions | `/credits` | Credit balance, active subscriptions, purchase history |
+| Buy Credits | `/credits/buy` | Credit pack selection → Stripe Checkout |
+| Subscribe | `/credits/subscribe` | Subscription tier selection → Stripe Checkout |
+| Profile | `/profile` | Name, email, phone, language preference |
+| Data Export | `/profile/export` | DSGVO data export request |
+| Delete Account | `/profile/delete` | DSGVO account deletion request |
+
+### Teacher (`teacher` role)
+
+| Page | Route | Purpose |
+|---|---|---|
+| My Schedule | `/teacher/schedule` | Upcoming and past classes for this teacher |
+| Class Session | `/teacher/class/:sessionId` | Attendance list, mark present/absent, session notes |
+
+### Tenant Admin (`tenant_admin` role)
+
+| Page | Route | Purpose |
+|---|---|---|
+| Dashboard | `/admin` | KPI overview: bookings today, revenue this month, attendance rate |
+| Class Management | `/admin/classes` | CRUD for class types (name, description, capacity, duration) |
+| Schedule Management | `/admin/schedule` | Create/edit recurring and one-off schedule entries |
+| Schedule Entry Editor | `/admin/schedule/:entryId` | Single entry: class type, teacher, time, location, capacity, draft/published |
+| Teacher Management | `/admin/teachers` | List, invite, deactivate teachers |
+| Customer List | `/admin/customers` | Search customers, view booking history, credit balance |
+| Customer Detail | `/admin/customers/:customerId` | Individual customer: bookings, credits, subscriptions |
+| Credit Pack Config | `/admin/pricing/packs` | Create/edit credit packs (amount, price, expiry) |
+| Subscription Tier Config | `/admin/pricing/subscriptions` | Create/edit subscription tiers (credits/period, price) |
+| Revenue Reports | `/admin/reports` | Revenue by period, class, pack/subscription breakdown |
+| Waitlist Management | `/admin/waitlists` | View active waitlists across classes |
+| Studio Settings | `/admin/settings` | Studio name, description, location, default locale, cancellation window |
+
+### Super Admin (`super_admin` role)
+
+| Page | Route | Purpose |
+|---|---|---|
+| Tenant List | `/super/tenants` | All tenants, status, plan, created date |
+| Tenant Detail | `/super/tenants/:tenantId` | Tenant config, billing status, DPA management |
+| Create Tenant | `/super/tenants/new` | Onboard new studio |
+| Global Settings | `/super/settings` | Platform-wide configuration |
+
+**Total: 28 pages**
 
 ---
 
-## Key Middleware
+## 2. Layouts
 
-### `tenantProcedure`
-A tRPC middleware that:
-1. Extracts `tenantId` from the verified JWT context.
-2. Injects `tenantId` into every Prisma query via a Prisma client extension (`$allOperations` where clause).
-3. Prevents any query from returning rows belonging to another tenant.
+### Public Layout
+- **Top nav:** Studio logo (left), language switcher (right), login button (right)
+- **Content:** max-width 72rem, centered, generous side margins
+- **Footer:** Studio contact, legal links (Impressum, Datenschutz)
+- Per Warm Stone: warm linen background (`--color-background`), no sidebar
 
-```typescript
-// Conceptual — not production code
-const tenantProcedure = publicProcedure.use(({ ctx, next }) => {
-  if (!ctx.tenantId) throw new TRPCError({ code: 'FORBIDDEN' });
-  return next({ ctx: { ...ctx, db: scopedPrismaClient(ctx.tenantId) } });
-});
+### Authenticated Layout
+- **Top nav:** StudioBase logo (left), navigation links (center, role-aware), user avatar + dropdown (right)
+- **Content:** max-width 72rem, centered
+- **No sidebar** — top navigation only (Warm Stone direction breaks the SaaS sidebar pattern)
+
+### Admin Layout
+- Extends Authenticated Layout
+- Sub-navigation row below main nav for deep sections (Pricing → Packs | Subscriptions)
+
+---
+
+## 3. Component Tree
+
+### Shared Components
+
+```
+TopNav
+├── Logo
+├── NavLinks (role-aware, from §4)
+├── LanguageSwitcher (DE/EN toggle)
+└── UserMenu (avatar, dropdown: profile, logout)
+
+ClassCard
+├── ClassName (Fraunces heading)
+├── TeacherName + Avatar
+├── TimeSlot (date, start–end)
+├── SpotsBadge ("3 spots left" / "Full")
+└── BookButton / WaitlistButton / LoginPrompt
+
+ScheduleView
+├── DaySelector (horizontal date pills, scroll)
+├── DayList (mobile: vertical ClassCard list)
+└── WeekGrid (desktop: 7-column, time rows, warm row striping)
+
+CreditBalance
+├── TotalCredits
+├── ExpiryBreakdown (FIFO order by expiresAt)
+└── PurchaseHistoryLink
+
+BookingCard
+├── ClassCard (compact variant)
+├── BookingStatus (confirmed / cancelled / waitlisted)
+├── CancelButton (visible within cancellation window)
+└── CreditUsed
+
+DataTable
+├── ColumnHeaders (sortable)
+├── Rows (warm hover highlight)
+├── Pagination
+├── SearchBar
+└── EmptyState
+
+Modal
+├── Overlay
+├── Content (sharp corners per Warm Stone, 1px warm border)
+├── CloseButton
+└── ActionFooter
+
+Toast (slide-in, terracotta accent for alerts)
+SkeletonLoader (warm linen-to-surface shimmer)
+EmptyState (message + CTA, no stock illustrations)
+FormField (label, input, validation, help text)
 ```
 
-### Role Guards
-Composable role guards built on `tenantProcedure`:
-- `adminProcedure` — requires `tenant_admin` or `super_admin`
-- `teacherProcedure` — requires `teacher`, `tenant_admin`, or `super_admin`
-- `superAdminProcedure` — requires `super_admin` only
+### Key Page Component Trees
+
+#### Schedule Page (`/:tenantSlug/schedule`)
+```
+PublicLayout
+└── SchedulePage
+    ├── StudioHeader (name, description, location)
+    ├── ClassFilterBar (class type, teacher dropdown)
+    └── ScheduleView
+        ├── DaySelector
+        └── DayList / WeekGrid
+            └── ClassCard (×n)
+```
+
+#### My Bookings (`/bookings`)
+```
+AuthLayout
+└── BookingsPage
+    ├── PageHeader ("My Bookings")
+    ├── TabBar (Upcoming | Past)
+    ├── BookingList
+    │   └── BookingCard (×n)
+    └── EmptyState
+```
+
+#### Admin Dashboard (`/admin`)
+```
+AdminLayout
+└── DashboardPage
+    ├── KPIRow
+    │   ├── KPICard (Bookings Today)
+    │   ├── KPICard (Revenue This Month)
+    │   ├── KPICard (Attendance Rate)
+    │   └── KPICard (Active Customers)
+    ├── TodaySchedule (compact DayList)
+    └── RecentActivity (bookings, cancellations, signups)
+```
+
+#### Teacher Class Session (`/teacher/class/:sessionId`)
+```
+AuthLayout
+└── ClassSessionPage
+    ├── ClassHeader (name, time, location)
+    ├── AttendanceList
+    │   └── AttendanceRow (×n)
+    │       ├── CustomerName
+    │       ├── AttendanceToggle
+    │       └── BookingStatus
+    ├── SessionNotesEditor
+    └── SessionStats (booked, attended, no-show)
+```
+
+#### Admin Schedule Management (`/admin/schedule`)
+```
+AdminLayout
+└── ScheduleManagementPage
+    ├── PageHeader + CreateButton
+    ├── WeekSelector
+    ├── ScheduleGrid (week view, time×day matrix)
+    │   └── ScheduleSlot (×n)
+    │       ├── ClassName, TeacherName, Time
+    │       ├── StatusBadge (draft/published)
+    │       └── BookingCount / Capacity
+    └── DraftBanner
+```
 
 ---
 
-## Frontend Pages
+## 4. Navigation Structure
 
-| Page | Route | Roles |
-|---|---|---|
-| Public booking page | `/book` | anonymous |
-| Customer dashboard | `/dashboard` | customer |
-| Credit purchase | `/credits` | customer |
-| Teacher portal | `/teacher` | teacher |
-| Admin dashboard | `/admin` | tenant_admin |
-| Studio settings | `/admin/studio` | tenant_admin |
-| Class type management | `/admin/classes` | tenant_admin |
-| Schedule calendar | `/admin/schedule` | tenant_admin |
-| User management | `/admin/users` | tenant_admin |
+### Primary Nav Links by Role
 
----
-
-## Credit FIFO Logic
-
-Credit consumption order is determined by sorting `CreditLedger` grant rows by `expiresAt ASC NULLS LAST`, then `createdAt ASC`. Debits are applied against the oldest non-zero grant first. This logic lives in a pure service function (`consumeCredits`) covered by unit tests.
-
----
-
-## Stripe Integration
-
-- **Credit packs:** `payment.createCheckoutSession` → Stripe Checkout (one-time) → webhook `checkout.session.completed` → credit grant written to ledger.
-- **Subscriptions:** `payment.createCheckoutSession` (mode=subscription) → Stripe Billing → webhook `invoice.paid` → monthly credit grant.
-- **Refunds:** webhook `charge.refunded` → credits revoked (debit entry in ledger, status flag on Payment row).
-- **Customer portal:** `payment.createPortalSession` → Stripe Billing Portal for self-service subscription management.
-
----
-
-## Email (Waitlist Notifications)
-
-- Dev: Mailpit (SMTP on `localhost:1025`), web UI on `localhost:8025`.
-- Prod: configurable SMTP (SES, SendGrid).
-- Nodemailer used server-side; templates are plain HTML with i18n string interpolation.
-
----
-
-## Key Non-Functionals
-
-| Concern | Approach |
+| Role | Links |
 |---|---|
-| Tenant isolation | `tenantId` on all tables + Prisma client extension enforces at ORM layer |
-| PII at rest | AES-256 encrypt/decrypt in Prisma middleware on `User.email`, `User.name`, `User.phone` |
-| Audit trail | `AuditLog` written on every booking, credit, and payment mutation |
-| DSGVO export | `user.requestExport` serialises all rows related to the user and emails a JSON link |
-| Mobile-first | Tailwind responsive utilities; tested at 375px breakpoint |
-| Localisation | All UI strings in `i18n/{de,en}.json`; locale resolved from user preference → tenant default → `de` |
+| **Customer** | Schedule, My Bookings, Credits |
+| **Teacher** | My Schedule |
+| **Tenant Admin** | Dashboard, Schedule, Classes, Customers, Pricing, Reports, Settings |
+| **Super Admin** | Tenants, Settings |
+
+### Secondary Nav (contextual sub-nav row)
+
+- **Pricing:** Packs | Subscriptions
+- **Profile:** Profile | Data Export | Delete Account
+- **Customer Detail:** breadcrumb Customers → [Name]
+
+### Route Access Control
+
+| Route Pattern | Auth | Role |
+|---|---|---|
+| `/:tenantSlug/**` | No | — |
+| `/auth/**` | No | — |
+| `/bookings/**` | Yes | `customer` |
+| `/credits/**` | Yes | `customer` |
+| `/profile/**` | Yes | any |
+| `/teacher/**` | Yes | `teacher` |
+| `/admin/**` | Yes | `tenant_admin` |
+| `/super/**` | Yes | `super_admin` |
+
+---
+
+## 5. User Flows
+
+### Flow 1: Book a Class
+```
+Schedule → ClassCard [Book]
+  ├─ not logged in → Login → redirect back
+  ├─ logged in, has credits → Confirm Modal → [Confirm]
+  │   → POST booking → credit deducted (FIFO) → toast → appears in My Bookings
+  ├─ logged in, no credits → "Buy Credits" modal → /credits/buy
+  │   → select pack → Stripe Checkout → return → retry booking
+  └─ class full → Waitlist Modal → [Join] → FIFO position shown → toast
+```
+
+### Flow 2: Cancel a Booking
+```
+My Bookings → BookingCard [Cancel]
+  ├─ within window → Confirm Modal → [Confirm]
+  │   → DELETE booking → credit returned → toast
+  │   → waitlist: next customer auto-offered (email)
+  └─ outside window → "Cannot cancel" message
+```
+
+### Flow 3: Teacher Marks Attendance
+```
+My Schedule → Class Session → AttendanceList
+  → toggle present/absent per customer
+  → add session notes (optional)
+  → [Save] → PUT → toast
+```
+
+### Flow 4: Admin Creates Recurring Schedule
+```
+Schedule Management → [Create]
+  → Schedule Entry Editor
+    → class type, teacher, time, day(s), location, recurrence
+    → Save as Draft / Publish
+  → entries appear in grid
+  → [Publish] → visible on public schedule
+```
+
+### Flow 5: Customer Subscribes
+```
+Credits → [Subscribe] → Subscribe Page
+  → select tier → Stripe Checkout (subscription)
+  → return → subscription active → credits granted per cycle
+  → manage via Stripe Billing portal
+```
+
+### Flow 6: Waitlist Auto-Promotion
+```
+(booking cancelled for full class)
+  → query waitlist (FIFO) → first customer
+  → reserve spot (temporary hold)
+  → email: "A spot opened up!"
+  → customer confirms → credit deducted
+  → no confirmation within window → next customer
+```
+
+### Flow 7: DSGVO Export / Deletion
+```
+Profile → Data Export → [Request]
+  → generate JSON → download link
+Profile → Delete Account → [Request]
+  → confirm (type "DELETE") → account marked
+  → PII purged within 30 days → email confirmation
+```
+
+---
+
+## 6. Data Requirements by Component
+
+| Component | Reads | Writes |
+|---|---|---|
+| ClassCard | class, teacher, booked count, capacity | — |
+| BookButton | auth state, credit balance, class availability | booking (CREATE) |
+| ScheduleView | classes for date range by day | — |
+| CreditBalance | user credits (amount, expiry dates) | — |
+| BookingCard | booking, class info, cancellation window | booking (DELETE) |
+| AttendanceRow | customer name, booking, attendance | attendance (UPDATE) |
+| KPICard | aggregated metric for time period | — |
+| PackCard | pack name, credits, price, expiry | — |
+| BuyButton | pack ID | Stripe checkout session (CREATE) |
+| DataTable | paginated list + search/filter | — |
+| ScheduleSlot | schedule entry, class, teacher, status | status (UPDATE) |
+| WaitlistButton | class ID | waitlist entry (CREATE) |
+
+---
+
+## 7. States
+
+### Loading
+- Every page: skeleton loader with warm linen shimmer (Warm Stone)
+- Schedule: skeleton day-list with placeholder ClassCards
+- KPIs: individual skeleton cards
+
+### Empty
+- No bookings: "You haven't booked any classes yet" + link to schedule
+- No credits: "No credits remaining" + link to buy
+- No classes (admin): "Create your first class" + CTA
+- No customers: "Customers appear here after their first booking"
+
+### Error
+- Network error: toast with retry
+- Booking race condition (class filled): "Class just filled — join waitlist?"
+- Payment failure: Stripe error displayed + retry
+- Auth expired: redirect to login with return URL
+
+---
+
+## 8. Warm Stone Design Integration
+
+### Typography
+- **Fraunces** (variable serif) for all headings — warm, distinctive, anti-SaaS
+- **Source Sans 3** for body text — legible, slightly warmer than Inter
+- **JetBrains Mono** for data/numbers
+
+### Layout Principles
+- **Top nav only** — no left sidebar
+- **Sharp-cornered cards** with 1px warm border (`--color-border`) — no rounded-xl
+- **Asymmetric layouts** where appropriate (2/3 + 1/3 splits on detail pages)
+- **Generous whitespace** — 2rem minimum between content blocks
+- **Content max-width: 72rem**
+
+### Color Application
+- Warm umber (`--color-primary`) for buttons, active states, links
+- Terracotta (`--color-accent`) for notifications, badges, CTAs
+- Sage green (`--color-success`) for confirmed bookings
+- Warm linen (`--color-surface`) for card backgrounds
+- Barely-there warmth (`--color-background`) for page
+
+### Animation
+- Transitions: 250–300ms ease-out
+- Page content: fade-in with 8px upward drift (200ms)
+- Hover: background color shift only, no scale
+- Loading: warm shimmer (linen-to-surface gradient pulse)
+- Schedule slot selection: gentle background fill left-to-right (150ms)

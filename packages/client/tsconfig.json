@@ -1,21 +1,17 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "useDefineForClassFields": true,
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
-    "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
     "jsx": "react-jsx",
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "paths": {
+      "@/*": ["./src/*"],
+      "@studiobase/server/*": ["../server/src/*"]
+    }
   },
-  "include": ["src"],
-  "references": [{ "path": "./tsconfig.node.json" }]
+  "include": ["src/**/*", "../server/src/trpc/**/*", "../server/src/types/**/*", "../server/src/services/**/*", "../server/src/middleware/encryption.ts"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx", "src/__tests__/**/*"]
 }

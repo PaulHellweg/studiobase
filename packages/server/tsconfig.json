@@ -1,18 +1,11 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "resolveJsonModule": true,
-    "declaration": true,
-    "emitDecoratorMetadata": false,
-    "experimentalDecorators": false
+    "paths": {
+      "@studiobase/shared": ["../shared/src"],
+      "@studiobase/shared/*": ["../shared/src/*"]
+    }
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*", "../shared/src/**/*"]
 }

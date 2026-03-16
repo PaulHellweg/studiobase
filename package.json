@@ -1,17 +1,31 @@
 {
-  "name": "studiobase",
-  "version": "0.1.0",
+  "name": "@studiobase/root",
+  "version": "0.0.1",
   "private": true,
+  "packageManager": "pnpm@10.31.0",
   "scripts": {
-    "dev": "concurrently \"pnpm dev:server\" \"pnpm dev:client\"",
-    "dev:server": "cd packages/server && pnpm dev",
-    "dev:client": "cd packages/client && pnpm dev",
-    "db:push": "cd packages/server && pnpm prisma db push",
-    "db:seed": "cd packages/server && pnpm prisma db seed",
-    "docker:up": "docker compose up -d",
-    "docker:down": "docker compose down"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:watch": "turbo test:watch",
+    "test:coverage": "turbo test:coverage",
+    "test:e2e": "turbo test:e2e",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "format": "prettier --write \"packages/*/src/**/*.{ts,tsx,json,css}\"",
+    "typecheck": "turbo typecheck",
+    "db:generate": "pnpm --filter=server drizzle-kit generate",
+    "db:migrate": "pnpm --filter=server drizzle-kit migrate",
+    "db:push": "pnpm --filter=server drizzle-kit push",
+    "db:studio": "pnpm --filter=server drizzle-kit studio",
+    "db:seed": "pnpm --filter=@studiobase/server db:seed"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "turbo": "^2.4.0",
+    "typescript": "^5.6.0",
+    "prettier": "^3.4.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0"
   }
 }

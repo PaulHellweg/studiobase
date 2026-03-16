@@ -1,229 +1,208 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-// ─── Enum Schemas ─────────────────────────────────────────────────────────────
+// ── Tenant ───────────────────────────────────────────────────────────────────
 
-export const RoleSchema = z.enum([
-  "super_admin",
-  "tenant_admin",
-  "teacher",
-  "customer",
-]);
-
-export const ClassCategorySchema = z.enum([
-  "yoga",
-  "pilates",
-  "dance",
-  "fitness",
-  "meditation",
-  "martial_arts",
-  "other",
-]);
-
-export const RecurrenceTypeSchema = z.enum(["none", "daily", "weekly", "custom"]);
-
-export const InstanceStatusSchema = z.enum([
-  "scheduled",
-  "cancelled",
-  "completed",
-]);
-
-export const BookingStatusSchema = z.enum([
-  "confirmed",
-  "waitlisted",
-  "cancelled",
-  "attended",
-  "no_show",
-]);
-
-export const CreditTransactionTypeSchema = z.enum([
-  "purchase",
-  "deduction",
-  "refund",
-  "admin_adjustment",
-  "expiry",
-]);
-
-export const PaymentStatusSchema = z.enum([
-  "pending",
-  "succeeded",
-  "failed",
-  "refunded",
-]);
-
-// ─── Tenant Schemas ───────────────────────────────────────────────────────────
-
-export const CreateTenantSchema = z.object({
-  name: z.string().min(1).max(100),
-  slug: z
-    .string()
-    .min(2)
-    .max(50)
-    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with dashes"),
-  logoUrl: z.string().url().optional(),
-  primaryColor: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
+export const createTenantInput = z.object({
+  name: z.string().min(1).max(255),
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/),
+  locale: z.enum(['en', 'de']).default('en'),
+  plan: z.enum(['free', 'starter', 'pro']).default('free'),
 });
 
-export const UpdateTenantSchema = CreateTenantSchema.partial();
-
-// ─── Studio Schemas ───────────────────────────────────────────────────────────
-
-export const CreateStudioSchema = z.object({
-  name: z.string().min(1).max(100),
-  address: z.string().min(1),
-  timezone: z.string().min(1),
+export const updateTenantInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  locale: z.enum(['en', 'de']).optional(),
+  plan: z.enum(['free', 'starter', 'pro']).optional(),
+  settings: z.record(z.unknown()).optional(),
 });
 
-export const UpdateStudioSchema = CreateStudioSchema.partial();
+// ── Studio ───────────────────────────────────────────────────────────────────
 
-// ─── Room Schemas ─────────────────────────────────────────────────────────────
-
-export const CreateRoomSchema = z.object({
-  studioId: z.string().uuid(),
-  name: z.string().min(1).max(100),
-  capacity: z.number().int().positive(),
+export const updateStudioInput = z.object({
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional(),
+  address: z.string().max(500).optional(),
+  logoUrl: z.string().url().optional().nullable(),
 });
 
-export const UpdateRoomSchema = CreateRoomSchema.partial().omit({ studioId: true });
+// ── Class Type ───────────────────────────────────────────────────────────────
 
-// ─── ClassType Schemas ────────────────────────────────────────────────────────
-
-export const CreateClassTypeSchema = z.object({
-  name: z.string().min(1).max(100),
-  description: z.string().optional(),
-  category: ClassCategorySchema,
-  durationMinutes: z.number().int().positive(),
-  creditCost: z.number().int().nonnegative(),
-  color: z
-    .string()
-    .regex(/^#[0-9a-fA-F]{6}$/)
-    .optional(),
+export const createClassTypeInput = z.object({
+  name: z.string().min(1).max(255),
+  description: z.string().max(2000).optional(),
+  duration: z.number().int().positive().max(480),
+  capacity: z.number().int().positive().max(1000),
+  creditCost: z.number().int().positive().default(1),
 });
 
-export const UpdateClassTypeSchema = CreateClassTypeSchema.partial();
+export const updateClassTypeInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  description: z.string().max(2000).optional(),
+  duration: z.number().int().positive().max(480).optional(),
+  capacity: z.number().int().positive().max(1000).optional(),
+  creditCost: z.number().int().positive().optional(),
+  active: z.boolean().optional(),
+});
 
-// ─── Schedule Schemas ─────────────────────────────────────────────────────────
+// ── Schedule ─────────────────────────────────────────────────────────────────
 
-export const CreateScheduleSchema = z.object({
+export const createScheduleInput = z.object({
   classTypeId: z.string().uuid(),
-  roomId: z.string().uuid(),
   teacherId: z.string().uuid(),
-  recurrenceType: RecurrenceTypeSchema,
-  recurrenceDays: z.array(z.number().int().min(0).max(6)).optional(),
-  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Format HH:MM"),
-  endTime: z.string().regex(/^\d{2}:\d{2}$/, "Format HH:MM"),
-  startDate: z.coerce.date(),
-  endDate: z.coerce.date().optional(),
-  maxCapacity: z.number().int().positive(),
+  dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  location: z.string().max(255).optional(),
 });
 
-export const UpdateScheduleSchema = CreateScheduleSchema.partial();
-
-export const OverrideInstanceSchema = z.object({
-  instanceId: z.string().uuid(),
+export const updateScheduleInput = z.object({
+  id: z.string().uuid(),
+  classTypeId: z.string().uuid().optional(),
   teacherId: z.string().uuid().optional(),
-  roomId: z.string().uuid().optional(),
-  startAt: z.coerce.date().optional(),
-  endAt: z.coerce.date().optional(),
-  maxCapacity: z.number().int().positive().optional(),
-  isCancelled: z.boolean().optional(),
-  cancelReason: z.string().optional(),
-  notes: z.string().optional(),
+  dayOfWeek: z.number().int().min(0).max(6).optional().nullable(),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  endTime: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  location: z.string().max(255).optional(),
+  status: z.enum(['draft', 'published', 'cancelled']).optional(),
 });
 
-// ─── Booking Schemas ──────────────────────────────────────────────────────────
+export const createScheduleInstanceInput = z.object({
+  scheduleId: z.string().uuid(),
+  date: z.string().datetime(),
+  capacity: z.number().int().positive().optional(),
+});
 
-export const CreateBookingSchema = z.object({
+// ── Booking ──────────────────────────────────────────────────────────────────
+
+export const createBookingInput = z.object({
   scheduleInstanceId: z.string().uuid(),
 });
 
-export const CancelBookingSchema = z.object({
+export const cancelBookingInput = z.object({
   bookingId: z.string().uuid(),
-  cancelReason: z.string().optional(),
 });
 
-export const ListBookingsSchema = z.object({
-  scheduleInstanceId: z.string().uuid().optional(),
-  userId: z.string().uuid().optional(),
-  status: BookingStatusSchema.optional(),
-  from: z.coerce.date().optional(),
-  to: z.coerce.date().optional(),
-  limit: z.number().int().positive().max(100).default(50),
-  offset: z.number().int().nonnegative().default(0),
-});
-
-export const MarkAttendanceSchema = z.object({
+export const markAttendedInput = z.object({
   bookingId: z.string().uuid(),
-  status: z.enum(["attended", "no_show"]),
+  status: z.enum(['attended', 'no_show']),
 });
 
-// ─── Credit Schemas ───────────────────────────────────────────────────────────
+// ── Credit ───────────────────────────────────────────────────────────────────
 
-export const CreateCreditPackageSchema = z.object({
-  name: z.string().min(1).max(100),
-  credits: z.number().int().positive(),
-  priceCents: z.number().int().positive(),
-  currency: z.string().length(3).default("EUR"),
-  validityDays: z.number().int().positive().optional(),
-  stripePriceId: z.string().optional(),
-});
-
-export const UpdateCreditPackageSchema = CreateCreditPackageSchema.partial().extend({
-  isActive: z.boolean().optional(),
-});
-
-export const AdjustCreditBalanceSchema = z.object({
+export const grantCreditsInput = z.object({
   userId: z.string().uuid(),
-  amount: z.number().int(),
-  reason: z.string().min(1, "Reason is required for admin adjustments"),
+  amount: z.number().int().positive(),
+  expiryDays: z.number().int().positive().optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
-export const ListCreditTransactionsSchema = z.object({
-  userId: z.string().uuid().optional(),
-  type: CreditTransactionTypeSchema.optional(),
+// ── Payment / Stripe ─────────────────────────────────────────────────────────
+
+export const createCheckoutInput = z.object({
+  creditPackId: z.string().uuid().optional(),
+  subscriptionTierId: z.string().uuid().optional(),
+}).refine(
+  (data) => (data.creditPackId || data.subscriptionTierId) && !(data.creditPackId && data.subscriptionTierId),
+  { message: 'Provide either creditPackId or subscriptionTierId, not both' },
+);
+
+// ── User ─────────────────────────────────────────────────────────────────────
+
+export const updateProfileInput = z.object({
+  name: z.string().min(1).max(255).optional(),
+  phone: z.string().max(20).optional().nullable(),
+  locale: z.enum(['en', 'de']).optional(),
+  image: z.string().url().optional().nullable(),
+});
+
+// ── Waitlist ─────────────────────────────────────────────────────────────────
+
+export const joinWaitlistInput = z.object({
+  scheduleInstanceId: z.string().uuid(),
+});
+
+// ── Credit Pack ─────────────────────────────────────────────────────────────
+
+export const createCreditPackInput = z.object({
+  name: z.string().min(1).max(255),
+  quantity: z.number().int().positive(),
+  price: z.number().int().positive(), // cents
+  expiryDays: z.number().int().positive().optional().nullable(),
+});
+
+export const updateCreditPackInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  quantity: z.number().int().positive().optional(),
+  price: z.number().int().positive().optional(),
+  expiryDays: z.number().int().positive().optional().nullable(),
+  active: z.boolean().optional(),
+});
+
+// ── Subscription Tier ───────────────────────────────────────────────────────
+
+export const createSubscriptionTierInput = z.object({
+  name: z.string().min(1).max(255),
+  creditsPerPeriod: z.number().int().positive(),
+  period: z.enum(['weekly', 'monthly']),
+  price: z.number().int().positive(), // cents
+});
+
+export const updateSubscriptionTierInput = z.object({
+  id: z.string().uuid(),
+  name: z.string().min(1).max(255).optional(),
+  creditsPerPeriod: z.number().int().positive().optional(),
+  period: z.enum(['weekly', 'monthly']).optional(),
+  price: z.number().int().positive().optional(),
+  active: z.boolean().optional(),
+});
+
+// ── Schedule Instances (list) ───────────────────────────────────────────────
+
+export const listInstancesInput = z.object({
+  dateFrom: z.string().datetime(),
+  dateTo: z.string().datetime(),
+  limit: z.number().int().positive().max(200).default(100),
+  offset: z.number().int().nonnegative().default(0),
+});
+
+export const listByTeacherInput = z.object({
+  dateFrom: z.string().datetime(),
+  dateTo: z.string().datetime(),
+  limit: z.number().int().positive().max(200).default(100),
+  offset: z.number().int().nonnegative().default(0),
+});
+
+export const listByInstanceInput = z.object({
+  scheduleInstanceId: z.string().uuid(),
   limit: z.number().int().positive().max(100).default(50),
   offset: z.number().int().nonnegative().default(0),
 });
 
-// ─── Payment Schemas ──────────────────────────────────────────────────────────
+// ── Admin Dashboard ─────────────────────────────────────────────────────────
 
-export const CreateCheckoutSchema = z.object({
-  packageId: z.string().uuid(),
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+export const dateRangeInput = z.object({
+  dateFrom: z.string().datetime().optional(),
+  dateTo: z.string().datetime().optional(),
 });
 
-export const CreateSubscriptionSchema = z.object({
-  packageId: z.string().uuid(),
-  successUrl: z.string().url(),
-  cancelUrl: z.string().url(),
+// ── Slug-based lookup ───────────────────────────────────────────────────────
+
+export const slugInput = z.object({
+  slug: z.string().min(1).max(100),
 });
 
-export const ListPaymentsSchema = z.object({
-  userId: z.string().uuid().optional(),
-  status: PaymentStatusSchema.optional(),
-  limit: z.number().int().positive().max(100).default(50),
+// ── Pagination ───────────────────────────────────────────────────────────────
+
+export const paginationInput = z.object({
+  limit: z.number().int().positive().max(100).default(20),
   offset: z.number().int().nonnegative().default(0),
 });
 
-// ─── User Schemas ─────────────────────────────────────────────────────────────
+// ── ID param ─────────────────────────────────────────────────────────────────
 
-export const UpdateUserSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
-  phone: z.string().optional(),
-  avatarUrl: z.string().url().optional(),
-  marketingConsent: z.boolean().optional(),
-});
-
-export const ListUsersSchema = z.object({
-  search: z.string().optional(),
-  limit: z.number().int().positive().max(100).default(50),
-  offset: z.number().int().nonnegative().default(0),
-});
-
-export const GetUserSchema = z.object({
-  userId: z.string().uuid(),
+export const idInput = z.object({
+  id: z.string().uuid(),
 });
